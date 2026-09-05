@@ -13,7 +13,7 @@ interface StopwatchModalProps {
 }
 
 const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSaveAndClose, targetDuration = 0, subject: initialSubject }) => {
-  const { studyPlans, selectedDataFile, availablePlans, getRecommendedSession, studyCycle, sessionProgressMap } = useData();
+  const { studyPlans, selectedPlanId, availablePlanIds, getRecommendedSession, studyCycle, sessionProgressMap } = useData();
   const [mode, setMode] = useState('cronometro'); // 'cronometro' or 'timer'
   const [time, setTime] = useState(0); // time in milliseconds
   const [isRunning, setIsRunning] = useState(false);
@@ -24,9 +24,9 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
   const [selectedTopic, setSelectedTopic] = useState<string | undefined>();
 
   const currentPlan = useMemo(() => {
-    const planIndex = availablePlans.indexOf(selectedDataFile);
+    const planIndex = availablePlanIds.indexOf(selectedPlanId);
     return studyPlans[planIndex];
-  }, [studyPlans, selectedDataFile, availablePlans]);
+  }, [studyPlans, selectedPlanId, availablePlanIds]);
 
   const subjects = useMemo(() => {
     if (!currentPlan || !currentPlan.subjects) return [];
@@ -227,7 +227,7 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
   const timerProgress = initialTimerTime > 0 ? ((initialTimerTime - time) / initialTimerTime) * 100 : 0;
   const hasStarted = mode === 'cronometro' ? time > 0 || isRunning : time < initialTimerTime || isRunning;
 
-  const renderTopicOptions = (topics: any[], level = 0): JSX.Element[] => {
+  const renderTopicOptions = (topics: any[], level = 0): React.JSX.Element[] => {
     return topics.flatMap(topic => {
       const prefix = '\u00A0\u00A0'.repeat(level);
       const isParent = topic.sub_topics && topic.sub_topics.length > 0;

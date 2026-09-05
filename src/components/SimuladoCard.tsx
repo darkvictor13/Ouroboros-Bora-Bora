@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { FaPencilAlt, FaTrash, FaCheckCircle, FaTimesCircle, FaMinusCircle, FaChevronDown, FaChevronUp, FaStar } from 'react-icons/fa';
-import { SimuladoRecord, SimuladoSubject } from '../app/actions';
+import type { SimuladoRecord, SimuladoSubject } from '@/lib/data';
 
 interface SimuladoCardProps {
   simulado: SimuladoRecord;

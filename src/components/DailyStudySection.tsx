@@ -8,6 +8,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import type { TooltipItem } from 'chart.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -23,7 +24,14 @@ const formatMinutesToHoursMinutes = (totalMinutes: number) => {
   }
 };
 
-const DailyStudySection = ({ dailySubjectStudyTime, subjectColors, className }) => {
+interface DailyStudySectionProps {
+  /** Tempo por matéria e por dia, em milissegundos, indexado por `YYYY-MM-DD`. */
+  dailySubjectStudyTime: { [date: string]: { [subject: string]: number } };
+  subjectColors: { subject: string; color: string }[];
+  className?: string;
+}
+
+const DailyStudySection = ({ dailySubjectStudyTime, subjectColors, className }: DailyStudySectionProps) => {
   const [currentDate, setCurrentDate] = useState('');
 
   useEffect(() => {
@@ -37,7 +45,7 @@ const DailyStudySection = ({ dailySubjectStudyTime, subjectColors, className }) 
   const today = new Date().toISOString().split('T')[0];
   const todaysStudyData = dailySubjectStudyTime && dailySubjectStudyTime[today] ? dailySubjectStudyTime[today] : {};
 
-  const subjectColorMap = subjectColors.reduce((acc, subject) => {
+  const subjectColorMap = subjectColors.reduce<Record<string, string>>((acc, subject) => {
     acc[subject.subject] = subject.color;
     return acc;
   }, {});
@@ -71,7 +79,7 @@ const DailyStudySection = ({ dailySubjectStudyTime, subjectColors, className }) 
       },
       tooltip: {
         callbacks: {
-          label: function(context) {
+          label: function(context: TooltipItem<'pie'>) {
             const label = context.label || '';
             const value = context.parsed;
             return `${label}: ${formatMinutesToHoursMinutes(value)}`;

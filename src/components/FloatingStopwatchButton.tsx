@@ -34,7 +34,6 @@ const FloatingStopwatchButton: React.FC<FloatingStopwatchButtonProps> = ({ isVis
       subject: subject || '',
       topic: topic || '',
       questions: { correct: 0, total: 0 },
-      material: '',
       category: 'teoria',
       notes: 'Estudo cronometrado.',
       reviewPeriods: [],

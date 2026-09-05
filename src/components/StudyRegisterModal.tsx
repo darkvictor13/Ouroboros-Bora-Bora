@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, Fragment } from 'react';
-import { getJsonContent } from '../app/actions';
+import { getPlan } from '@/lib/data';
 import { useData, EditalTopic } from '../context/DataContext';
 import { useNotification } from '../context/NotificationContext';
 import { StudyRecord } from '@/context/DataContext';
@@ -13,6 +13,7 @@ import { FaInfoCircle } from 'react-icons/fa';
 interface Topic extends EditalTopic {}
 
 interface Subject {
+  id: string;
   subject: string;
   topics: Topic[];
   color?: string;
@@ -157,7 +158,7 @@ const StudyRegisterModal: React.FC<StudyRegisterModalProps> = ({
     return 0;
   };
 
-  const { selectedDataFile, deleteStudyRecord, cycleGenerationTimestamp, saveSubject } = useData();
+  const { selectedPlanId, deleteStudyRecord, cycleGenerationTimestamp, saveSubject } = useData();
   const { showNotification } = useNotification();
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -231,9 +232,9 @@ const StudyRegisterModal: React.FC<StudyRegisterModalProps> = ({
 
   useEffect(() => {
     const fetchEditalData = async () => {
-      if (selectedDataFile) {
+      if (selectedPlanId) {
         try {
-          const data = await getJsonContent(selectedDataFile);
+          const data = await getPlan(selectedPlanId);
           let loadedSubjects: Subject[] = [];
           if (Array.isArray(data)) {
             loadedSubjects = data;
@@ -250,7 +251,7 @@ const StudyRegisterModal: React.FC<StudyRegisterModalProps> = ({
       }
     };
     fetchEditalData();
-  }, [selectedDataFile, refreshSubjects]);
+  }, [selectedPlanId, refreshSubjects]);
 
   useEffect(() => {
     if (selectedSubject) {
@@ -276,7 +277,7 @@ const StudyRegisterModal: React.FC<StudyRegisterModalProps> = ({
         setSelectedDate(initialRecord.date || getLocalYYYYMMDD());
         const today = getLocalYYYYMMDD();
         const yesterday = getLocalYYYYMMDD(new Date(new Date().setDate(new Date().getDate() - 1)));
-        setShowDatePicker(initialRecord.date && initialRecord.date !== today && initialRecord.date !== yesterday);
+        setShowDatePicker(!!initialRecord.date && initialRecord.date !== today && initialRecord.date !== yesterday);
         const total = initialRecord.questions?.total || 0;
         const correct = initialRecord.questions?.correct || 0;
         setQuestions([{ correct: correct, incorrect: total - correct }]);
@@ -353,6 +354,12 @@ const StudyRegisterModal: React.FC<StudyRegisterModalProps> = ({
       id: initialRecord?.id || '',
       date: selectedDate,
       subject: selectedSubject,
+      // A v1 não mandava `subjectId` daqui: editar um registro apagava o
+      // vínculo com a matéria, e só o nome sobrevivia a um rename.
+      subjectId:
+        subjects.find(s => s.subject === selectedSubject)?.id ||
+        initialRecord?.subjectId ||
+        '',
       topic: selectedTopic,
       studyTime: parseTime(studyTime),
       questions: { correct: questions[0].correct, total: questions[0].correct + questions[0].incorrect },

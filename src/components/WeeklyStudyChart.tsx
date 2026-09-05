@@ -11,10 +11,18 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import type { ChartOptions, TooltipItem } from 'chart.js';
 
 
 
-const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }) => {
+interface WeeklyStudyChartProps {
+  /** Horas estudadas por dia, indexadas por `YYYY-MM-DD`. */
+  dailyStudyHours: { [date: string]: number };
+  /** Questões por dia, indexadas por `YYYY-MM-DD`. */
+  dailyQuestionStats: { [date: string]: { correct: number; total: number } };
+}
+
+const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }: WeeklyStudyChartProps) => {
   const [viewMode, setViewMode] = useState('time'); // 'time' or 'questions'
 
   if (!dailyStudyHours || !dailyQuestionStats) {
@@ -25,7 +33,7 @@ const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }) => {
     );
   }
 
-  const processChartData = (dailyData, dataKey) => {
+  const processChartData = (dailyData: Record<string, any>, dataKey: 'hours' | 'total') => {
     const weekLabels = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
     const today = new Date();
     const dayOfWeek = today.getDay(); // Sunday = 0, Monday = 1, etc.
@@ -91,7 +99,7 @@ const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }) => {
       },
       tooltip: {
         callbacks: {
-          label: function(context) {
+          label: function(context: TooltipItem<'bar'>) {
             let label = context.dataset.label || '';
             if (label) {
               label += ': ';
@@ -117,7 +125,7 @@ const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }) => {
         beginAtZero: true,
         ticks: {
           color: '#4b5563', // gray-700
-          callback: function(value) {
+          callback: function(value: string | number) {
             return viewMode === 'time' ? `${value}h` : value;
           }
         },

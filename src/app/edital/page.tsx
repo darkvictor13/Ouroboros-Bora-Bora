@@ -68,7 +68,8 @@ const EditalPage = () => {
       const updatedRecord = { ...recordToUpdate, teoriaFinalizada: !recordToUpdate.teoriaFinalizada };
       await updateStudyRecord(updatedRecord);
     } else {
-      const newRecord: Omit<StudyRecord, 'id'> = {
+      // `subjectId` é resolvido pelo contexto, a partir do nome da matéria.
+      const newRecord: Omit<StudyRecord, 'id' | 'subjectId'> = {
         date: new Date().toISOString().split('T')[0],
         subject: subjectText,
         topic: topicText,

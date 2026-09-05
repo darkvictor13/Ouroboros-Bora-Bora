@@ -17,11 +17,20 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 
 
 
+/**
+ * `drawingArea` é o raio útil do radar. Existe em tempo de execução, mas o
+ * chart.js não o declara na tipagem pública de `RadialLinearScale`.
+ */
+type RadarScale = RadialLinearScale & { drawingArea: number };
+
 // Plugin customizado para desenhar os rótulos curvados
 const curvedPointLabelsPlugin = {
   id: 'curvedPointLabels',
   afterDraw: (chart: Chart) => {
-    const { ctx, scales: { r } } = chart;
+    const { ctx } = chart;
+    // `RadialLinearScale` expõe `drawingArea`, `xCenter`, `yCenter` e
+    // `getIndexAngle`, que a interface genérica `Scale` não declara.
+    const r = chart.scales.r as RadarScale | undefined;
 
     if (!r) {
       return;
@@ -41,9 +50,9 @@ const curvedPointLabelsPlugin = {
 
     const labelRadius = r.drawingArea - 5;
 
-    labels.forEach((label, index) => {
+    labels.forEach((label: unknown, index: number) => {
       const angle = r.getIndexAngle(index) - (Math.PI / 4) - (35 * Math.PI / 180);
-      const text = label.toString().toUpperCase();
+      const text = String(label).toUpperCase();
       const characters = text.split('');
       const characterSpacing = (text.length > 10) ? 0.02 : 0.03; // Espaçamento angular entre as letras
 
@@ -53,7 +62,7 @@ const curvedPointLabelsPlugin = {
       // Ajusta o ângulo inicial para centralizar a palavra no eixo
       const startAngleForWord = angle - (totalTextAngularWidth / 2);
 
-      characters.forEach((char, i) => {
+      characters.forEach((char: string, i: number) => {
         const charAngle = startAngleForWord + i * characterSpacing; // Usa o ângulo inicial ajustado
         const x = r.xCenter + Math.cos(charAngle) * labelRadius;
         const y = r.yCenter + Math.sin(charAngle) * labelRadius;
@@ -95,7 +104,7 @@ const formatTimeLabel = (value: number): string => {
   return `${hours}h`;
 };
 
-const EXAMPLE_DATA = {
+const EXAMPLE_DATA: Record<string, number> = {
   teoria: 8,
   revisao: 5.5,
   questoes: 12,

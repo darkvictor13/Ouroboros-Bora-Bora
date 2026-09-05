@@ -2,33 +2,36 @@
 
 ## Objetivos originais
 
-- [ ] Utilizar Supabase para armazenar os dados → **Fases 1–4**
+- [x] Utilizar Supabase para armazenar os dados → **Fases 1–3** — feito; nenhum acesso a `fs` sobrou no app.
 - [ ] Garantir que todas as tabelas do Supabase tenham RLS → **Fase 1**
-- [ ] Ter um comando para rodar apenas a interface, sem Electron → **Fase 5**
-- [ ] Ter automações no GitHub para migrations no Supabase e deploy → **Fase 6**
+- [x] Ter um comando para rodar apenas a interface, sem Electron → **Fase 5** — `npm ci --omit=optional`
+      + `npm run dev:web`. Falta só o `output: 'export'`, que espera a Fase 3.
+- [ ] Ter automações no GitHub para migrations no Supabase e deploy → **Fase 6** — workflows escritos,
+      nenhum rodou ainda (faltam os secrets; ver a tabela na Fase 6).
 
 ## Arquitetura alvo
 
 ```
-HOJE:     Browser → Next Server (Node) → fs (JSON em DATA_DIR/<userId>/)
-DEPOIS:   Browser (bundle estático) → Supabase (Postgres + Auth + RLS)
+v1:       Browser → Next Server (Node) → fs (JSON em DATA_DIR/<userId>/)
+HOJE:     Browser → Supabase (Postgres + Auth + RLS)     ← a Fase 3 chegou aqui
+DEPOIS:   Browser (bundle estático) → Supabase           ← falta o `output: 'export'` da Fase 5
 ```
 
-Levantamento que define esta arquitetura:
+Levantamento que definiu esta arquitetura:
 
-- **15 das 17 páginas já são `'use client'`.** As exceções são `layout.tsx` (só exporta `metadata`) e
-  `page.tsx` (um `redirect`).
+- **15 das 17 páginas já eram `'use client'`.** As exceções são `layout.tsx` (só exporta `metadata`) e
+  `page.tsx` (um `redirect`, que a Fase 5 troca).
 - **Zero uso** de `cookies()`, `generateMetadata`, `revalidate` ou `dynamic`.
-  (A Fase 2 introduziu **um** `cookies()`, em `src/lib/supabase/server.ts`, como ponte até a
-  Fase 3 migrar as actions. Ele sai junto com elas.)
-- As rotas dinâmicas `[fileName]` e `[subjectName]` leem o parâmetro via `useParams()` — no cliente.
+  (A Fase 2 introduziu **um** `cookies()`, em `src/lib/supabase/server.ts`. Ele sobreviveu à Fase 3:
+  o último consumidor é a autenticação de `/api/import-guide`, e os dois morrem na Fase 5.)
+- As rotas dinâmicas `[planId]` e `[subjectName]` leem o parâmetro via `useParams()` — no cliente.
   O servidor nunca precisa dele.
-- Todo o acesso a dados passa por **um único arquivo**: `src/app/actions.tsx` (866 linhas, ~29 server
-  actions, todas `fs`).
+- Todo o acesso a dados passava por **um único arquivo**: `src/app/actions.tsx` (866 linhas, ~29
+  server actions, todas `fs`). A Fase 3 o substituiu por `src/lib/data/`, no browser.
 
-Conclusão: o servidor Node existe hoje só por causa do `fs`. Removido ele, o app vira SPA estática
-(`output: 'export'`), hospedagem fica gratuita e **a RLS deixa de ser defesa em profundidade e passa a
-ser a única camada de segurança dos dados**.
+Conclusão: o servidor Node existia só por causa do `fs`. Removido ele, o app vira SPA estática,
+hospedagem fica gratuita e **a RLS deixa de ser defesa em profundidade e passa a ser a única camada
+de segurança dos dados** — o que já vale hoje, desde que a Fase 3 tirou o `fs` do caminho.
 
 ---
 
@@ -103,11 +106,14 @@ ser a única camada de segurança dos dados**.
       ⚠️ Não usar `middleware.ts`: middleware não roda em export estático. Quem protege os dados de
       verdade é a RLS.
 - [x] Remover `next-auth`, `bcryptjs`, `src/lib/users.ts` e `src/app/api/auth/**`
-- [x] **Ponte temporária — `src/lib/supabase/server.ts`, remover na Fase 3.** As ~29 actions de
-      `actions.tsx` e a rota `/api/import-guide` ainda gravam em disco e precisam saber de quem é o
-      diretório. Elas passaram a ler a sessão do Supabase pelo cookie (`getAuthenticatedUser()`, que
-      usa `getUser()` e valida o JWT — `getSession()` confiaria no cookie, que é entrada do cliente).
-      Este é o **único** uso de `cookies()` no projeto, e ele some quando a Fase 5 ligar `output: 'export'`.
+- [x] **Ponte temporária — `src/lib/supabase/server.ts`.** As ~29 actions de `actions.tsx` e a rota
+      `/api/import-guide` ainda gravavam em disco e precisavam saber de quem era o diretório. Elas
+      passaram a ler a sessão do Supabase pelo cookie (`getAuthenticatedUser()`, que usa `getUser()` e
+      valida o JWT — `getSession()` confiaria no cookie, que é entrada do cliente).
+      Este é o **único** uso de `cookies()` no projeto.
+      ↪ **Correção:** a Fase 2 previu removê-lo na Fase 3, e não foi o que aconteceu. A Fase 3 tirou
+      as actions do caminho, mas a rota de import continua precisando dele. O arquivo morre na
+      Fase 5, junto com a rota.
 - [x] `.env.local.example` com `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`
       (antecipado da Fase 5: sem ele o app não sobe depois desta fase). O `.gitignore` ganhou
       `!.env.local.example`.
@@ -125,85 +131,317 @@ e-mail duplicado devolve `user_already_exists` e username duplicado devolve `235
 `tsc` continua barulhento. Confirmado que esta fase **não** acrescentou nenhum erro novo
 (diff do `tsc --noEmit` antes/depois: só remoções).
 
-## Fase 3 — Camada de dados (fase longa)
+## Fase 3 — Camada de dados
 
-> Uma action por vez, em commits separados, **mantendo assinatura e retorno idênticos** para não tocar
-> no `DataContext` (1797 linhas).
+> **Concluída** em 2026-09-05. As ~29 server actions de `src/app/actions.tsx` deram lugar a
+> `src/lib/data/`, que fala com o Postgres direto do browser. O arquivo `actions.tsx` foi apagado e
+> nenhum código de dados roda mais no servidor.
 
-- [ ] Desligar `typescript.ignoreBuildErrors` e `eslint.ignoreDuringBuilds` em `next.config.js`
-      **antes de começar**. Num refactor deste tamanho o compilador é o teste de regressão — hoje ele
-      está silenciado.
-- [ ] Trocar a chave de acesso das actions de `fileName` (`"meu-plano.json"`) para `planId` (uuid).
-      Fazer agora; deixar `fileName` sobreviver como chave é a dívida que mais dói depois.
-- [ ] `getUserDataDirectory()` (`actions.tsx:88`) vira `getAuthenticatedUser()` retornando o `uid`
-- [ ] Migrar as actions nesta ordem (dependência crescente):
-  - [ ] `getJsonFiles`, `getJsonContent`
-  - [ ] `createPlanFile`, `updatePlanFile`, `deletePlanFile`
-  - [ ] `saveStudyRecord`, `getStudyRecords`, `deleteStudyRecordAction`
-  - [ ] `saveReviewRecord`, `getReviewRecords`
-  - [ ] `saveSimuladoRecord`, `getSimuladoRecords`, `updateSimuladoRecord`, `deleteSimuladoRecordAction`
-  - [ ] `saveStudyCycleToFile`, `getStudyCycleFromFile`, `deleteStudyCycleFile`
-  - [ ] `renameSubjectAction`, `addOrUpdateSubjectAction`, `updateTopicWeightAction`, `updateAllTopicWeightsAction`
-  - [ ] `clearAllDataAction`, `exportAllDataAction`
-- [ ] Descartar `migrateStudyRecordIds` e `migrateToSubjectIds` — viram migrations SQL, não código de runtime
-- [ ] `uploadImage` (`actions.tsx:421`) hoje devolve base64 embutido no JSON, o que incharia a linha do
-      plano a cada leitura. Mover para Supabase Storage com bucket privado e política própria.
+### A camada nova
 
-## Fase 4 — Migração dos dados existentes
+- [x] `src/lib/data/types.ts` — os tipos do domínio, antes espalhados e duplicados entre `actions.tsx`,
+      `DataContext.tsx` e cada página.
+- [x] `src/lib/data/mappers.ts` — a tradução `snake_case` ↔ `camelCase`. Todo `record.subject_id` do
+      projeto mora aqui; o resto do app só enxerga os tipos.
+- [x] `src/lib/data/index.ts` — as funções. Nenhuma delas filtra por dono para *autorizar*: o `user_id`
+      que elas gravam existe para satisfazer o `with check` das políticas, e as leituras confiam no
+      `using`. Quem decide o que cada usuário enxerga é a RLS.
+- [x] `getUserDataDirectory()` virou `requireUserId()`, que usa `getUser()` (valida o JWT) e não
+      `getSession()`.
 
-- [ ] **Não existe base de usuários central para migrar** — cada instalação é local (desktop ou Docker
-      self-hosted). E o app já tem `exportFullBackupAction` / `restoreFullBackupAction` e a página
-      `/backup`.
-- [ ] Caminho de migração: usuário exporta o backup JSON na v1 → cria conta na v2 → importa.
-      Basta reescrever `restoreFullBackupAction` para gravar no Supabase **tolerando o formato antigo**.
-      Nenhum script de migração server-side é necessário.
-- [ ] Testar com um backup real gerado pela v1.1.3 antes de anunciar
+| Antes (`actions.tsx`) | Agora (`@/lib/data`) |
+|---|---|
+| `getJsonFiles` + N × `getJsonContent` | `getPlans()` — uma consulta só |
+| `getJsonContent(fileName)` | `getPlan(planId)` |
+| `createPlanFile(FormData)` | `createPlan(input)` |
+| `updatePlanFile` | `updatePlan` |
+| `deletePlanFile` / `deleteJsonFile` | `deletePlan` |
+| `uploadImage` (base64 no JSON) | `uploadPlanIcon` (Storage) |
+| `saveStudyCycleToFile` / `getStudyCycleFromFile` / `deleteStudyCycleFile` | `saveStudyCycle` / `getStudyCycle` / `deleteStudyCycle` |
+| `*Action` (renameSubject, addOrUpdateSubject, updateTopicWeight, updateAllTopicWeights) | mesmos nomes, sem o sufixo |
+| `exportFullBackupAction` / `restoreFullBackupAction` | `exportAllData` / `restoreBackup` |
+| `migrateStudyRecordIds`, `migrateToSubjectIds` | **descartadas** — o schema já exige o que elas consertavam |
+
+- [x] `fileName` → `planId` (uuid) como chave de acesso, ponta a ponta: `selectedDataFile` virou
+      `selectedPlanId`, `availablePlans` virou `availablePlanIds`, e a rota
+      `src/app/planos/[fileName]` virou `src/app/planos/[planId]`.
+      Consequência: o nome do plano deixou de ser identidade e virou rótulo. As telas que exibiam
+      `fileName.replace('.json','')` (`PlanSelector`, `/planos`, `/planos/[planId]`,
+      `/materias/[subjectName]`) passaram a ler `plan.name`, e o contexto ganhou `selectedPlan` para
+      evitar o `availablePlanIds.indexOf(...)` espalhado pela UI.
+- [x] A chave do `localStorage` mudou de `selectedDataFile` para `ouroboros.selectedPlanId` — o valor
+      antigo é um nome de arquivo, que nunca casaria com um uuid. De quebra, a escolha do plano agora
+      é de fato gravada: a v1 lia essa chave na carga mas só a escrevia ao excluir um plano.
+- [x] IDs de registros, revisões e simulados passaram a ser `crypto.randomUUID()`, no lugar de
+      `` `${Date.now()}-${random}` ``. Dois efeitos que exigiram mudança de lógica:
+  - O ciclo de estudos lia o instante do registro de dentro do próprio ID para saber o que contava
+    para o ciclo atual. Agora lê `created_at`, exposto como `StudyRecord.createdAt`.
+  - O ID da revisão era `` `${studyRecordId}-${period}` ``, e reeditar um registro sobrescrevia as
+    revisões dos mesmos períodos (vazando as dos períodos removidos). Sem esse determinismo,
+    `updateStudyRecord` apaga as revisões do registro e regrava — o que também corrige o vazamento.
+
+### Migration `0002_phase3_data_layer.sql`
+
+A Fase 1 desenhou o schema a partir do TODO, não do runtime. Migrando as actions apareceram quatro
+lacunas:
+
+- [x] `plans.banca` — o importador de guia extrai a banca e o `CreatePlanModal` tem campo para ela;
+      `/planos` exibe. Não havia coluna.
+- [x] `study_cycles.completed_cycles` e `cycle_generation_timestamp` — o `DataContext` já gravava e
+      lia os dois. Sem coluna, o contador de ciclos concluídos zeraria a cada recarga.
+- [x] `plans.icon_url` → `icon_path`, e bucket privado `plan-icons` com quatro políticas comparando
+      `(storage.foldername(name))[1]` com `auth.uid()`. A v1 embutia a imagem como data: URI dentro do
+      plano, e ela viajava em toda leitura. A camada de dados assina as URLs em lote na leitura
+      (1 hora de validade), então a UI continua recebendo `iconUrl` pronto para exibir.
+- [x] `simulado_subjects`: o schema reservou `id uuid` supondo que o app mandasse o ID da matéria do
+      plano. Não manda — o `AddSimuladoModal` monta cada linha como
+      `{ name, weight, totalQuestions, correct, incorrect, color }`, sem ID. O vínculo é o nome, e é
+      por nome que o rename de matéria propaga. `id` ficou como chave da linha, gerada pelo banco.
+
+### Backup (o que era a Fase 4)
+
+- [x] `exportAllData` gera `version: 4`, mantendo o esqueleto da v1 (`plans: [{ fileName, content }]`
+      com os registros dentro do plano, `cycles` à parte) para que backup antigo e novo entrem pelo
+      mesmo caminho. O `fileName` já não identifica nada: é rótulo derivado do nome.
+- [x] `restoreBackup` limpa a conta e recria tudo, tolerando o formato da v1 — plano gravado como
+      array puro de matérias, matéria sem `id`, matéria de simulado como `subjectName`. Os IDs são
+      remapeados para uuid preservando o vínculo revisão → registro.
+- [ ] **Falta testar com um backup real gerado pela v1.1.3** antes de anunciar. O teste automatizado
+      cobre o ciclo exportar → restaurar dentro da v2; o formato antigo está coberto no código, não na
+      prática.
+
+### Compilador ligado
+
+- [x] `typescript.ignoreBuildErrors: false`. Eram **166 erros pré-existentes** em 31 arquivos, todos
+      escondidos; hoje `tsc --noEmit` está em zero e `next build` passa com a checagem ligada.
+      O compilador pagou a passagem — cada item abaixo é um bug que ele expôs:
+  - `/planos/[planId]` somava `record.correctQuestions` e `record.incorrectQuestions`, campos que
+    nunca existiram em `StudyRecord`. Os contadores de questões daquela tela mostravam sempre zero.
+  - O `StudyRegisterModal` montava o registro **sem `subjectId`**: editar um registro apagava o
+    vínculo com a matéria, e só o nome sobrevivia a um rename.
+  - O `AddSessionModal` criava sessões de ciclo sem `subjectId`, que por isso não casavam com
+    nenhum registro de estudo.
+  - `/historico` passava `onApplyFilters` para o `FilterModal`, que espera `onApply` — filtrar pelo
+    histórico nunca funcionou.
+  - `/revisoes` lia `studyRecord.comments`; o campo gravado é `notes`. O botão de comentário nunca
+    aparecia. Também lia `studyRecord.material`, que **nada persiste** (ver dívida abaixo).
+  - `SimuladoLineChart` passava funções em `color`, `titleColor` e afins. O chart.js não trata essas
+    opções como scriptable: o valor renderizado era a própria função. Agora o tema vem do
+    `ThemeContext` e as cores são strings.
+  - `ConsistencyData` declarava `studied: boolean`; o que se grava é `status`, com quatro valores.
+  - `NotificationContext` tipava só `success | error`, mas o app usa `warning` e `info` desde a v1 —
+    e os dois caíam na cor de erro.
+  - `PlanSelector` tinha três handlers mortos chamando um `setIsDeselectConfirmModalOpen` inexistente.
+- [x] `EditalTopic` passou a declarar como opcionais os seis campos que são *derivados* por
+      `calculateStats` (`completed`, `reviewed`, `total`, `percentage`, `last_study`, `is_completed`) —
+      um tópico recém-criado ou vindo do importador não tem nenhum deles. O formato já calculado é o
+      `ComputedEditalTopic`, no `DataContext`.
+- [ ] `eslint.ignoreDuringBuilds` **continua `true`**. O `next lint` nunca chegou a rodar neste
+      repositório (flat config + Next 14 abriam um wizard interativo), e agora que roda mostra ~200
+      violações — 114 `no-unused-vars`, 73 `no-explicit-any`. É uma limpeza própria, não a migração de
+      dados; registrada na Fase 6.
+
+### Verificado em 2026-09-05
+
+`scripts/test-data-layer.mjs` dirige o app com Puppeteer contra o Supabase local: **22/22, zero erro
+de console**. Cobre cadastro, criação de plano, matéria, registro de estudo com duas revisões,
+reedição do registro, ciclo manual, simulado, ícone e backup. Confirmado também no Postgres:
+
+- o registro grava `subject_id`, `questions`, `review_periods` e `notes`, e as duas revisões nascem
+  com as datas certas (`1d` → D+1, `7d` → D+7);
+- ao reeditar removendo o período de `7d`, sobra **exatamente uma** revisão — sem duplicar (o que os
+  uuid causariam sem o delete) e sem vazar a removida (o bug da v1);
+- a sessão do ciclo grava `subjectId`, e `completed_cycles` faz o round-trip;
+- a linha do simulado volta com `subject_name` e `position`;
+- o ícone vive em `<uid>/<planId>-<rand>.png` no bucket privado e a URL assinada responde 200;
+- restaurar o backup zera a conta e recria tudo, com o vínculo revisão → registro preservado;
+- excluir o plano leva junto registros, revisões, ciclos **e** o objeto do Storage.
+
+`npm run test:rls` continua passando com o schema da `0002`.
+
+O teste precisa do `npm run dev` e do `npx supabase start` no ar. Não há linha no `package.json`
+para ele; o comando é `node scripts/test-data-layer.mjs`.
+
+### Dívidas que a Fase 3 deixa
+
+- [ ] **`src/lib/supabase/server.ts` sobreviveu.** O TODO da Fase 2 dizia "remover na Fase 3", mas o
+      único uso restante de `cookies()` é a autenticação da rota `/api/import-guide`, que é
+      desktop-only (decisão 0.2) e morre na Fase 5, junto com o arquivo.
+- [ ] **O input "Material" do `StudyRegisterModal` não grava nada.** O estado existe, o campo aparece,
+      e o valor nunca entra no registro — em nenhuma versão. Duas telas liam `record.material` e
+      recebiam `undefined`; essas leituras foram removidas. Persistir o campo pede coluna nova e é
+      decisão de produto, não refactor.
+- [ ] **`next/image` saiu dos ícones de plano**, em `/planos` e `/planos/[planId]`, porque a URL
+      assinada do Storage tem query string e host que muda por ambiente. O `CreatePlanModal` ainda
+      usa `next/image`, então `images: { unoptimized: true }` continua necessário na Fase 5.
 
 ## Fase 5 — Export estático + rodar só a interface
 
+> Em andamento. O que não depende do `src/` já está feito; o resto espera a Fase 3 fechar, porque
+> `output: 'export'` não pode ser ligado com o build instável.
+
+### Feito
+
+- [x] Mover `electron`, `electron-builder`, `concurrently` e `wait-on` para `optionalDependencies`.
+      **`puppeteer` ficou em `dependencies`**, pela decisão 0.2 — ele é dependência real do build
+      desktop. Quem não quer o Chromium usa `PUPPETEER_SKIP_DOWNLOAD=true` na instalação.
+      Verificado: `npm ci --omit=optional` remove os 4 pacotes e mais 233 transitivos, e mantém
+      `next`, `typescript` e `puppeteer`.
+- [x] Scripts `dev:web` e `start:web` no `package.json`. `start:web` roda `next build` e serve `out/`
+      com `serve -s` — o mesmo fallback de SPA que o `_redirects` faz no Cloudflare Pages, então o
+      preview local bate com produção. (`next start` deixa de existir sob `output: 'export'`.)
+- [x] `electron-builder`: `!node_modules/{electron,electron-builder,concurrently,wait-on}/**` na chave
+      `files`. `optionalDependencies` contam como dependência de produção, e sem isso o instalador
+      passaria a embarcar as próprias ferramentas de build.
+      ⚠️ **Não verificado** — depende de rodar `npm run build:electron`, que agora é sempre manual
+      (não há mais workflow de release). Conferir no próximo empacotamento do desktop.
+- [x] `setup-env.js` virou validador de `.env.local`: nada de `data/`, nada de `NEXTAUTH_SECRET`.
+      Cria o arquivo a partir do `.env.local.example` se ele não existir e sai com código 1 quando
+      falta variável, para servir de passo de pré-voo.
+- [x] Criar `.env.local.example` com `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` — feito na Fase 2
+- [x] README: seção "Rodando Só a Interface (Web)" + "Configurando o Supabase". O resto do README
+      (tecnologias, download, Docker com `NEXTAUTH_SECRET`) continua desatualizado e é da Fase 7.
+- [x] Importador de guia portado para o processo main do Electron: `electron/guide-importer.js`
+      (`ipcMain.handle('import-guide')` + `importGuide` no preload). É o porte de
+      `src/app/api/import-guide/route.ts`, que **precisa** morrer: route handler `POST` não sobrevive
+      a `output: 'export'`. Duas melhorias em relação à rota: a versão do Chrome empacotado é
+      descoberta lendo o diretório em vez de ficar fixa no código, e o ícone volta como `data:` URI
+      para o renderer subir no Storage, em vez de ser embutido no plano.
+      ⚠️ **Não verificado** — precisa de uma importação real no Electron.
+
+### Bloqueado na Fase 3
+
 - [ ] `next.config.js`: `output: 'export'` e `images: { unoptimized: true }`
-      (`next/image` é usado em `planos/page.tsx`, `planos/[fileName]/page.tsx` e `CreatePlanModal.tsx`;
-      o otimizador exige servidor)
+      (`next/image` é usado em `planos/page.tsx`, `planos/[planId]/page.tsx` e `CreatePlanModal.tsx`;
+      o otimizador exige servidor). O arquivo é da Fase 3 até ela desligar os dois `ignore`.
 - [ ] `src/app/page.tsx`: o `redirect()` é de Server Component e quebra no export → virar redirect
       client-side ou a própria tela inicial
 - [ ] Converter as rotas dinâmicas em query string (`output: 'export'` exigiria `generateStaticParams`,
       impossível para dados de usuário). Ambas já usam `useParams()`, então são 3 linhas de navegação:
-  - [ ] `src/app/planos/page.tsx:182` → `/planos?id=<uuid>`
-  - [ ] `src/app/materias/page.tsx:165` → `/materias?nome=<x>`
-  - [ ] `src/app/planos/[fileName]/page.tsx:535`
+  - [ ] `src/app/planos/page.tsx` → `/planos?id=<uuid>`
+  - [ ] `src/app/materias/page.tsx` → `/materias?nome=<x>`
+  - [ ] `src/app/planos/[planId]/page.tsx`
   - [ ] (a página de matérias **já lê** `useSearchParams` — o padrão está no próprio código)
-- [ ] Mover `electron`, `electron-builder`, `puppeteer`, `concurrently` e `wait-on` para
-      `optionalDependencies`, para que `npm install --omit=optional && npm run dev` suba só a web
-- [ ] Adicionar scripts `dev:web` e `start:web` no `package.json`
-- [x] Criar `.env.local.example` com `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` — feito na Fase 2
-- [ ] `setup-env.js`: remover a criação de `data/` e do `NEXTAUTH_SECRET` (vira validador de `.env.local`, ou some)
-- [ ] Atualizar o README com a seção "Rodando só a interface"
+- [ ] Trocar o `fetch('/api/import-guide')` do `ImportGuideForm` pelo `window.electronAPI.importGuide`,
+      esconder o formulário quando ele não existir (web) e deletar
+      `src/app/api/import-guide/route.ts`
+- [ ] Deletar `src/lib/supabase/server.ts`. O TODO da Fase 2 dizia "remover na Fase 3", mas o único
+      uso que sobrou é a rota de import — então ele cai junto com ela, aqui.
+- [ ] Rodar `npm run start:web` e conferir o app inteiro servido de `out/`, sem servidor Node
 
 ## Fase 6 — Automações no GitHub
 
-- [ ] `.github/workflows/ci.yml` — em todo PR: `npm ci`, `tsc --noEmit`, `next lint`, `next build`.
-      Só faz sentido depois de desligar os `ignore` do passo da Fase 3.
-- [ ] `.github/workflows/migrations.yml` — em push na `master`: `supabase link` + `supabase db push`.
-      Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD`.
-      Adicionar `supabase db lint` no PR para pegar migration quebrada antes do merge.
-- [ ] Avaliar Supabase Branching (banco efêmero por PR) — evita que uma migration ruim derrube produção
-- [ ] `.github/workflows/deploy.yml` — `wrangler pages deploy out/` no Cloudflare Pages.
-      Encadear com `needs:` para a migration rodar **antes** do deploy.
-- [ ] `_redirects` com `/* /index.html 200` para o roteamento SPA
-- [ ] `.github/workflows/release.yml` — em tag `v*`: `build:electron` em matrix `ubuntu-latest` +
-      `windows-latest`, publicando `.deb` / `.AppImage` / `.exe` na release.
-      Hoje isso é manual e é o que segura a atualização do link de download no README.
-- [ ] Workflow agendado com um `select 1` no Supabase (o plano free pausa projetos inativos)
+> **Escopo: só a web.** O GitHub publica a SPA e cuida do banco — nada de build de desktop.
+> O empacotamento do Electron fica manual, na máquina de quem faz a release.
+>
+> **Escrita.** Nenhum workflow rodou ainda: o `ci.yml` vai reprovar enquanto os erros de TypeScript
+> da Fase 3 e os de ESLint não zerarem (é o comportamento correto — é justamente para isso que ele
+> existe), e o `deploy.yml` só produz algo publicável depois que a Fase 5 ligar `output: 'export'`.
+> Faltam os secrets, listados no fim desta seção.
+
+- [x] **`npm run lint` estava quebrado e ninguém sabia.** O projeto usa flat config
+      (`eslint.config.mjs`), e o `next lint` do Next 14 só enxerga `.eslintrc*` — o comando abria um
+      wizard interativo perguntando como configurar o ESLint. Num CI, isso é um job travado.
+      O script virou `cross-env ESLINT_USE_FLAT_CONFIG=true eslint src`.
+- [ ] **Zerar a dívida de lint: 200 erros e 10 warnings** (medido em 2026-09-05, com o lint
+      finalmente rodando). São 114 `@typescript-eslint/no-unused-vars`, 73
+      `@typescript-eslint/no-explicit-any`, 6 `prefer-const`, 6 `react/no-unescaped-entities`,
+      1 `no-empty-object-type`; os warnings são 7 `react-hooks/exhaustive-deps` e
+      3 `@next/next/no-img-element`. `--fix` resolve 5.
+      Enquanto não zerar, o `ci.yml` fica vermelho. É de propósito: era essa a informação que o
+      `eslint.ignoreDuringBuilds` escondia.
+- [x] `.github/workflows/ci.yml` — em todo PR, dois jobs:
+      **`web`** (`npm ci --omit=optional`, `tsc --noEmit`, `npm run lint`, `next build`) e
+      **`migrations`** (`supabase db start` num Postgres limpo, `supabase db lint` e
+      `supabase db advisors --type security`).
+      O `--omit=optional` é de propósito: o CI instala exatamente o que o deploy instala, então um
+      `import` de `electron` do lado da web quebra aqui e não em produção.
+- [x] `supabase db lint` no PR — ficou no `ci.yml`, junto com a aplicação das migrations num banco
+      limpo. Migration que não aplica reprova antes de chegar perto do banco remoto. Os dois
+      comandos precisam de `--fail-on error`: sem isso eles imprimem o problema e saem 0.
+      Verificados contra o Supabase local em 2026-09-05 — os dois passam no schema de hoje.
+- [x] **Bônus: `supabase db advisors --type security` no mesmo job.** Ele reprova tabela em `public`
+      sem RLS habilitada, ou seja, é o objetivo 2 do topo deste arquivo virando teste automático em
+      vez de disciplina.
+- [x] `.github/workflows/deploy.yml` — em push na `master`: job `migrations`
+      (`supabase link` + `supabase db push --include-all`) e job `deploy`
+      (`wrangler pages deploy out`) com `needs: migrations`.
+      **Desvio do plano:** o TODO previa `migrations.yml` e `deploy.yml` separados, encadeados com
+      `needs:`. `needs:` só existe entre jobs do mesmo workflow; a alternativa (`workflow_run`) roda
+      em outro contexto e falha em silêncio. Viraram dois jobs de um arquivo só, que é o
+      encadeamento que o TODO pedia.
+      `--include-all` porque, sem ele, o `db push` para na primeira migration fora de ordem
+      cronológica — o que acontece toda vez que dois PRs com migration são mergeados de véspera.
+- [x] `public/_redirects` com `/* /index.html 200`. Vai em `public/` porque `output: 'export'` copia
+      a pasta inteira para `out/`, que é o que o Pages publica.
+- [x] ~~`.github/workflows/release.yml` — build do Electron em matrix `ubuntu-latest` +
+      `windows-latest` em tag `v*`.~~ **Descartado em 2026-09-05, por decisão do dono do projeto:
+      o que sai do GitHub é só a SPA.** O workflow chegou a ser escrito e foi removido.
+      Consequência: o build desktop continua manual (`npm run build:electron`), e o link de download
+      do README continua sendo atualizado à mão. O arquivo nunca chegou a ser commitado, então não
+      está no histórico — se um dia isso incomodar, é reescrever do zero.
+- [x] `.github/workflows/keepalive.yml` — `select 1` via `psql` a cada 3 dias, contra a pausa por
+      inatividade do plano Free. ⚠️ O GitHub desativa workflows agendados em repositório sem commits
+      por 60 dias; se ele parar de rodar, é isso.
+- [x] **Supabase Branching — avaliado e descartado por ora.** Exige plano pago, e a tabela de custo
+      abaixo depende do Free. O que ele resolveria (migration ruim derrubando produção) está coberto
+      em boa parte pelo job `migrations` do `ci.yml`, que aplica as migrations num Postgres limpo a
+      cada PR. Reavaliar se o projeto sair do Free.
+
+### Secrets e variáveis que precisam ser criados no GitHub
+
+Sem eles os workflows falham. `Settings → Secrets and variables → Actions`.
+
+| Nome | Tipo | Onde achar | Usado por |
+|---|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | secret | Project Settings → API | ci, deploy |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | secret | Project Settings → API | ci, deploy |
+| `SUPABASE_ACCESS_TOKEN` | secret | `supabase login` / Account → Access Tokens | deploy |
+| `SUPABASE_PROJECT_ID` | secret | `ttlfqwkavesblklhutoh` (staging) | deploy |
+| `SUPABASE_DB_PASSWORD` | secret | senha do Postgres do projeto | deploy |
+| `SUPABASE_DB_URL` | secret | Database → Connection string (URI) | keepalive |
+| `CLOUDFLARE_API_TOKEN` | secret | Cloudflare → API Tokens (permissão Pages: Edit) | deploy |
+| `CLOUDFLARE_ACCOUNT_ID` | secret | Cloudflare → Workers & Pages | deploy |
+| `CLOUDFLARE_PROJECT_NAME` | **variável** | nome do projeto no Pages | deploy |
+
+O job de deploy usa o environment `production`; vale criar esse environment com required reviewer
+se a ideia for revisar antes de publicar.
 
 ## Fase 7 — Fechamento
 
-- [ ] `electron/main.js`: remover `startNextServer()` (linha 94) e `ensureDataDir()` (linha 78);
-      passar a usar `loadFile('out/index.html')`. Next sai das dependências de runtime do desktop.
-      A lógica do timer via IPC é independente e permanece.
+- [ ] `electron/main.js`: remover `startNextServer()` e `ensureDataDir()`; parar de depender do Next
+      em runtime. A lógica do timer via IPC é independente e permanece, assim como o
+      `ipcMain.handle('import-guide')` acrescentado na Fase 5.
+- [ ] ⚠️ **Não usar `loadFile('out/index.html')`.** Descoberto na Fase 5: `createBrowserClient`
+      guarda a sessão em **cookie**, e o Chromium não dá cookie para origem `file://` — o login
+      simplesmente não persiste. O caminho é registrar um protocolo próprio
+      (`protocol.handle('app', ...)` no Electron 30) e carregar `app://ouroboros/index.html`, que é
+      uma origem de verdade. Alternativa pior: voltar a subir um servidor estático local só para ter
+      um `http://localhost`.
+      A outra opção — trocar o storage da sessão para `localStorage` — muda o cliente do browser
+      inteiro e não vale por causa do desktop.
 - [ ] `docker-compose.yml`: trocar `NEXTAUTH_SECRET` pelas vars do Supabase e **remover o bind mount
       `.:/app`**, que hoje quebra a imagem de produção
 - [ ] Remover `src/components/StudyRegisterModal1.bkp` e `StudyRegisterModal2.bkp`
+- [ ] README: tecnologias (entra Supabase, sai o servidor Node), seção do Docker que ainda fala em
+      `NEXTAUTH_SECRET` / `DATABASE_URL`, e o link de download
 - [ ] Bump para v2.0.0 e atualizar README (tecnologias, instalação, download)
+
+---
+
+## Backlog — Migração dos dados da v1 (descartado por ora, NÃO implementar)
+
+> Era a **Fase 4**. Removida em 2026-09-05: a v2 web é um produto **diferente** do que existe hoje,
+> não a continuação da mesma base de dados. Ninguém precisa trazer histórico da v1.
+
+Se alguém pedir, o caminho já está desenhado e é barato:
+
+- Não existe base de usuários central para migrar — cada instalação é local (desktop ou Docker
+  self-hosted). E o app já tem `exportFullBackupAction` / `restoreFullBackupAction` e a página `/backup`.
+- Usuário exporta o backup JSON na v1 → cria conta na v2 → importa. Basta reescrever
+  `restoreFullBackupAction` para gravar no Supabase **tolerando o formato antigo**. Nenhum script de
+  migração server-side é necessário.
+- Testar com um backup real gerado pela v1.1.3 antes de anunciar.
 
 ---
 
@@ -283,8 +521,12 @@ localmente.
 
 ## Ordem de execução
 
-**Caminho crítico:** `0 → 1 → 2 → 3 → 4`
+**Caminho crítico:** `0 → 1 → 2 → 3`
 **Paralelizável depois da Fase 3:** Fases 5 e 6
+
+> A numeração pula a Fase 4 de propósito: ela era a migração dos dados da v1 e foi descartada
+> (ver o backlog). As fases 5–7 mantêm o número que sempre tiveram para não invalidar as
+> referências no histórico e no código.
 
 A parte cara é a **Fase 3** (~29 actions + troca de `fileName` por `planId`). Todo o resto é configuração.
 

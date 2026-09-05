@@ -3,9 +3,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext'; // Use useData
-import { createPlanFile } from '../actions'; // Keep this import for modals
+import { createPlan } from '@/lib/data';
 import Link from 'next/link';
-import Image from 'next/image';
 import CreatePlanModal from '../../components/CreatePlanModal';
 import { FaPlusCircle, FaFileAlt, FaTrash } from 'react-icons/fa';
 import { useNotification } from '../../context/NotificationContext';
@@ -14,27 +13,13 @@ import ImportGuideForm from '../../components/ImportGuideForm';
 import WelcomeScreen from '../../components/WelcomeScreen';
 
 // Interfaces (keep as is)
-interface PlanContent {
-  name: string;
-  observations: string;
-  iconUrl?: string;
-  subjects: Subject[];
-  banca?: string; // Adicionado para a banca
-}
-
-interface Subject {
-  subject: string;
-  topics: Topic[];
-}
-
 interface Topic {
-  topic_number?: string;
   topic_text: string;
   sub_topics?: Topic[];
 }
 
 interface PlanInfo {
-  fileName: string;
+  id: string;
   name: string;
   iconUrl?: string;
   subjectCount: number;
@@ -44,7 +29,7 @@ interface PlanInfo {
 
 export default function Planos() {
   const { status } = useAuth();
-  const { deletePlan, availablePlans, studyPlans, loading: dataContextLoading, refreshPlans } = useData(); // Get data from context
+  const { deletePlan, studyPlans, loading: dataContextLoading, refreshPlans } = useData();
   const { showNotification } = useNotification();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -59,24 +44,24 @@ export default function Planos() {
 
   const handleConfirmDelete = async () => {
     if (planToDelete) {
-      await deletePlan(planToDelete.fileName);
+      await deletePlan(planToDelete.id);
       showNotification(`Plano "${planToDelete.name}" excluído com sucesso.`, 'success');
       setPlanToDelete(null);
       setIsConfirmModalOpen(false);
     }
   };
 
-  const handleSavePlan = async (planData: { name: string; observations: string; cargo: string; edital: string; image?: File }) => {
-    const formData = new FormData();
-    formData.append('name', planData.name);
-    formData.append('observations', planData.observations);
-    formData.append('cargo', planData.cargo);
-    formData.append('edital', planData.edital);
-    if (planData.image) {
-      formData.append('image', planData.image);
-    }
-
-    const result = await createPlanFile(formData);
+  const handleSavePlan = async (planData: { name: string; observations: string; cargo: string; edital: string; banca?: string; imageFile?: File }) => {
+    // A v1 mandava um FormData porque a action rodava no servidor e a imagem
+    // precisava atravessar a fronteira. Agora o upload vai direto ao Storage.
+    const result = await createPlan({
+      name: planData.name,
+      observations: planData.observations,
+      cargo: planData.cargo,
+      edital: planData.edital,
+      banca: planData.banca ?? '',
+      iconFile: planData.imageFile,
+    });
 
     if (result.success) {
       showNotification(`Plano "${planData.name}" criado com sucesso!`, 'success');
@@ -88,70 +73,41 @@ export default function Planos() {
   };
 
   const plansToDisplay: PlanInfo[] = useMemo(() => {
-    if (!availablePlans || !studyPlans) return [];
-
     const countTopicsRecursively = (topics: Topic[]): number => {
-      let count = 0;
       if (!topics) return 0;
-      for (const topic of topics) {
-        count++;
-        if (topic.sub_topics && topic.sub_topics.length > 0) {
-          count += countTopicsRecursively(topic.sub_topics);
-        }
-      }
-      return count;
+      return topics.reduce(
+        (count, topic) => count + 1 + countTopicsRecursively(topic.sub_topics || []),
+        0
+      );
     };
 
-    return availablePlans.map((fileName, index) => {
-      const rawData = studyPlans[index]; // Assume studyPlans is in the same order as availablePlans
-      let plan: PlanContent;
-
-      if (Array.isArray(rawData)) {
-        plan = {
-          name: fileName.replace('.json', '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-          observations: '',
-          subjects: rawData,
-          banca: '',
-        };
-      } else if (rawData && typeof rawData === 'object') {
-        plan = rawData as PlanContent;
-        plan.banca = (rawData as any).banca || '';
-      } else {
-        plan = {
-          name: fileName.replace('.json', '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-          observations: '',
-          subjects: [],
-          banca: '',
-        };
-      }
-
-      const uniqueSubjectsMap = new Map<string, Subject>();
-      (plan.subjects || []).forEach(s => uniqueSubjectsMap.set(s.subject, s));
-      const subjectsToCount = Array.from(uniqueSubjectsMap.values());
-
-      let totalTopics = 0;
-      subjectsToCount.forEach(subject => {
-        totalTopics += countTopicsRecursively(subject.topics || []);
-      });
+    return studyPlans.map((plan) => {
+      // A v1 deduplicava as matérias por nome porque os arquivos antigos podiam
+      // repeti-las; o dado normalizado do banco mantém a garantia.
+      const uniqueSubjects = Array.from(
+        new Map(plan.subjects.map((s) => [s.subject, s])).values()
+      );
 
       return {
-        fileName: fileName,
-        name: plan.name || fileName.replace('.json', '').toUpperCase(),
+        id: plan.id,
+        name: plan.name,
         iconUrl: plan.iconUrl,
-        subjectCount: subjectsToCount.length,
-        topicCount: totalTopics,
+        subjectCount: uniqueSubjects.length,
+        topicCount: uniqueSubjects.reduce(
+          (total, subject) => total + countTopicsRecursively(subject.topics || []),
+          0
+        ),
         banca: plan.banca,
       };
     });
-  }, [availablePlans, studyPlans]);
-
+  }, [studyPlans]);
 
   if (status === 'loading' || (status === 'authenticated' && dataContextLoading)) {
     return <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center"><p>Carregando...</p></div>;
   }
 
   if (status === 'unauthenticated') {
-    return <WelcomeScreen />;
+    return <WelcomeScreen onOpenModal={() => setIsModalOpen(true)} />;
   }
 
   if (status === 'authenticated') {
@@ -178,15 +134,15 @@ export default function Planos() {
             <ImportGuideForm />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {plansToDisplay.map((plan) => (
-                <div key={plan.fileName} className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col items-center text-center p-6 group">
-                  <Link href={`/planos/${plan.fileName}`} className="w-full h-full">
+                <div key={plan.id} className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col items-center text-center p-6 group">
+                  <Link href={`/planos/${plan.id}`} className="w-full h-full">
                     {plan.iconUrl ? (
                       <div className="relative w-24 h-24 mb-4 rounded-full overflow-hidden border-4 border-amber-500 shadow-md mx-auto">
-                        {plan.iconUrl.startsWith('data:') ? (
-                          <img src={plan.iconUrl} alt={`Ícone do plano ${plan.name}`} className="w-full h-full object-cover" />
-                        ) : (
-                          <Image src={plan.iconUrl} alt={`Ícone do plano ${plan.name}`} layout="fill" objectFit="cover" />
-                        )}
+                        {/* `<img>` e não `next/image`: a URL do ícone é assinada
+                            pelo Storage, tem query string e host variável por
+                            ambiente — nada que o otimizador do Next saiba tratar,
+                            e ele exige um servidor que a Fase 5 vai remover. */}
+                        <img src={plan.iconUrl} alt={`Ícone do plano ${plan.name}`} className="w-full h-full object-cover" />
                       </div>
                     ) : (
                       <div className="w-24 h-24 mb-4 flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded-full text-gray-500 dark:text-gray-400 mx-auto">

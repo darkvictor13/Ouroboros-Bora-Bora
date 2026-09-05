@@ -2,84 +2,78 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
-import { 
-  getJsonFiles, 
-  getStudyRecords, 
-  saveStudyRecord, 
-  getReviewRecords, 
-  saveReviewRecord, 
-  deleteStudyRecordAction, 
-  getJsonContent, 
-  SimuladoRecord, 
-  saveSimuladoRecord, 
-  updateSimuladoRecord as updateSimuladoRecordAction, 
-  deleteSimuladoRecordAction as deleteSimuladoRecordActionImport, 
+import {
+  addOrUpdateSubject,
+  clearAllData as clearAllDataOnServer,
+  deletePlan as deletePlanOnServer,
+  deleteReviewRecordsForStudyRecord,
+  deleteSimuladoRecord as deleteSimuladoRecordOnServer,
+  deleteStudyCycle,
+  deleteStudyRecord as deleteStudyRecordOnServer,
+  exportAllData as exportAllDataFromServer,
+  getPlans,
+  getReviewRecords,
   getSimuladoRecords,
-  exportFullBackupAction,
-  restoreFullBackupAction,
-  saveStudyCycleToFile,
-  getStudyCycleFromFile,
-  deleteStudyCycleFile,
-  deleteJsonFile,
-  updateTopicWeightAction,
-  migrateToSubjectIds, // Adicionada a importação da migração
-  clearAllDataAction,
-  renameSubjectAction,
-  addOrUpdateSubjectAction
-} from '../app/actions';
+  getStudyCycle,
+  getStudyRecords,
+  renameSubject as renameSubjectOnServer,
+  restoreBackup,
+  saveReviewRecord,
+  saveReviewRecords,
+  saveSimuladoRecord,
+  saveStudyCycle,
+  saveStudyRecord,
+  updateTopicWeight as updateTopicWeightOnServer,
+} from '@/lib/data';
+import type {
+  EditalSubject,
+  EditalTopic,
+  PlanData,
+  ReviewRecord,
+  SimuladoRecord,
+  StudyCycleData,
+  StudyRecord,
+} from '@/lib/data';
 import { useNotification } from './NotificationContext';
 
-// --- INTERFACES HIERÁRQUICAS ---
-export interface EditalTopic {
-  topic_text: string;
+// As interfaces do domínio moram na camada de dados; o contexto as reexporta
+// porque metade dos componentes as importa daqui desde a v1.
+export type {
+  EditalSubject,
+  EditalTopic,
+  PlanData,
+  ReviewRecord,
+  SimuladoRecord,
+  SimuladoSubject,
+  StudyRecord,
+} from '@/lib/data';
+
+/**
+ * Um tópico depois de passar por `initializeTopicsRecursively`, que semeia os
+ * campos derivados com zero. É o formato que sai de `calculateStats` — o
+ * `EditalTopic` gravado no plano não tem nenhum deles.
+ */
+export type ComputedEditalTopic = Omit<
+  EditalTopic,
+  | 'sub_topics'
+  | 'completed'
+  | 'reviewed'
+  | 'total'
+  | 'percentage'
+  | 'last_study'
+  | 'is_completed'
+> & {
   completed: number;
   reviewed: number;
   total: number;
   percentage: number;
   last_study: string;
   is_completed: boolean;
-  userWeight?: number;
-  is_grouping_topic?: boolean;
-  sub_topics?: EditalTopic[];
-}
+  sub_topics: ComputedEditalTopic[];
+};
 
-export interface EditalSubject {
-  id: string; // Adiciona um ID único para a matéria
-  subject: string;
-  color: string;
-  topics: EditalTopic[];
-}
-// --- FIM DAS INTERFACES ---
-
-export interface StudyRecord {
-  id: string;
-  date: string;
-  subjectId: string; // ID da matéria para referência estável
-  subject: string; // Nome da matéria para exibição
-  topic: string;
-  studyTime: number;
-  questions?: { correct: number; total: number };
-  pages: { start: number; end: number }[];
-  videos: { title: string; start: string; end: string }[];
-  notes: string;
-  category: string;
-  reviewPeriods?: string[];
-  teoriaFinalizada: boolean;
-  countInPlanning: boolean;
-}
-
-export interface ReviewRecord {
-  id: string;
-  studyRecordId: string;
-  scheduledDate: string;
-  status: 'pending' | 'completed' | 'skipped';
-  originalDate: string;
-  subjectId: string; // ID da matéria para referência estável
-  subject: string; // Nome da matéria para exibição
-  topic: string;
-  reviewPeriod: string;
-  completedDate?: string;
-  ignored?: boolean;
+export interface ComputedEditalSubject extends EditalSubject {
+  topics: ComputedEditalTopic[];
 }
 
 interface Filters {
@@ -129,7 +123,12 @@ export interface HierarchicalPerformanceNode {
 
 export interface ConsistencyData {
   date: string;
-  studied: boolean;
+  /**
+   * `studied`/`failed` para os dias marcados como de estudo, `rest` para os
+   * outros e `inactive` antes do primeiro registro. A interface antiga
+   * declarava um `studied: boolean` que nunca foi gravado.
+   */
+  status: 'studied' | 'failed' | 'rest' | 'inactive';
   active: boolean;
 }
 
@@ -192,17 +191,17 @@ export interface Stats {
   categoryStudyHours: { [category: string]: number };
   subjectPerformance: SubjectPerformance;
   topicPerformance: HierarchicalPerformanceNode[];
-  editalData: EditalSubject[];
+  editalData: ComputedEditalSubject[];
   weeklyHours: number;
   weeklyQuestions: number;
 }
 
 const calculateStats = async (
   studyRecords: StudyRecord[],
-  selectedDataFile: string,
+  selectedPlanId: string,
   activeFilters: Filters,
   studyPlans: any[],
-  availablePlans: string[],
+  availablePlanIds: string[],
   consistencyOffset: number,
   studyDays: string[],
   studyCycle: StudySession[] | null
@@ -235,11 +234,11 @@ const calculateStats = async (
   lastDayOfWeek.setDate(firstDayOfWeek.getDate() + 6);
   lastDayOfWeek.setHours(23, 59, 59, 999);
 
-  let editalData: EditalSubject[] = [];
-  const currentPlanIndex = availablePlans.indexOf(selectedDataFile);
+  let editalData: ComputedEditalSubject[] = [];
+  const currentPlanIndex = availablePlanIds.indexOf(selectedPlanId);
   const currentPlanData = studyPlans[currentPlanIndex];
 
-  const initializeTopicsRecursively = (topics: any[], parentTopicText: string = ''): EditalTopic[] => {
+  const initializeTopicsRecursively = (topics: any[], parentTopicText: string = ''): ComputedEditalTopic[] => {
     return (topics || []).flatMap(topic => {
       let cleanedTopicText = topic.topic_text;
       if (parentTopicText && cleanedTopicText.startsWith(parentTopicText)) {
@@ -247,7 +246,7 @@ const calculateStats = async (
       }
       cleanedTopicText = cleanedTopicText.replace(/^[\s-]*\s*/, '').trim();
 
-      const newTopic: EditalTopic = {
+      const newTopic: ComputedEditalTopic = {
         ...topic,
         topic_text: cleanedTopicText,
         completed: 0,
@@ -415,7 +414,7 @@ const calculateStats = async (
     currentTopicPerf.performance = currentTopicPerf.correctPercentage;
   });
 
-  const processTopicsRecursively = (topics: EditalTopic[], subjectId: string) => {
+  const processTopicsRecursively = (topics: ComputedEditalTopic[], subjectId: string) => {
     topics.forEach(topic => {
       filteredStudyRecords.forEach(record => {
         if (record.subjectId === subjectId && record.topic === topic.topic_text) {
@@ -442,7 +441,7 @@ const calculateStats = async (
     processTopicsRecursively(subject.topics, subject.id);
   });
 
-  const aggregateStatsRecursively = (topic: EditalTopic): { completed: number, total: number, last_study: string, is_completed: boolean } => {
+  const aggregateStatsRecursively = (topic: ComputedEditalTopic): { completed: number, total: number, last_study: string, is_completed: boolean } => {
     if (!topic.sub_topics || topic.sub_topics.length === 0) {
       return { completed: topic.completed, total: topic.total, last_study: topic.last_study, is_completed: topic.is_completed };
     }
@@ -527,7 +526,7 @@ const calculateStats = async (
   const consistencyStartDate = new Date(today);
   consistencyStartDate.setDate(today.getDate() - 29);
 
-  const consistencyDaysData: any[] = [];
+  const consistencyDaysData: ConsistencyData[] = [];
   let consecutiveDays = 0;
   if (firstStudyDate) {
     const dayNameToNum: { [key: string]: number } = { 'Domingo': 0, 'Segunda': 1, 'Terça': 2, 'Quarta': 3, 'Quinta': 4, 'Sexta': 5, 'Sábado': 6 };
@@ -554,7 +553,7 @@ const calculateStats = async (
 
       const isStudyDay = studyDayNums.has(d.getDay());
       const studied = allStudiedDays.has(dateStr);
-      let status = 'inactive';
+      let status: ConsistencyData['status'] = 'inactive';
       if (isActive) status = isStudyDay ? (studied ? 'studied' : 'failed') : 'rest';
       consistencyDaysData.push({ date: dateStr, status, active: isActive });
     }
@@ -625,10 +624,14 @@ const calculateStats = async (
 };
 
 interface DataContextType {
-  selectedDataFile: string;
-  setSelectedDataFile: (fileName: string) => void;
-  availablePlans: string[];
-  studyPlans: any[];
+  /** Id (uuid) do plano ativo. Na v1 era o nome do arquivo. */
+  selectedPlanId: string;
+  setSelectedPlanId: (planId: string) => void;
+  /** Ids dos planos, na mesma ordem de `studyPlans`. */
+  availablePlanIds: string[];
+  studyPlans: PlanData[];
+  /** O plano ativo, ou `null` quando não há nenhum selecionado. */
+  selectedPlan: PlanData | null;
   studyRecords: StudyRecord[];
   reviewRecords: ReviewRecord[];
   simuladoRecords: SimuladoRecord[];
@@ -680,7 +683,7 @@ interface DataContextType {
   updateReminderNote: (id: string, newText: string) => void;
   exportAllData: () => any;
   importAllData: (data: any) => Promise<void>;
-  deletePlan: (fileName: string) => Promise<void>;
+  deletePlan: (planId: string) => Promise<void>;
   renameSubject: (subjectId: string, newName: string) => Promise<void>;
   saveSubject: (subjectData: { id?: string; subject: string; topics: EditalTopic[]; color: string }) => Promise<{ success: boolean; error?: string; subjectId?: string; }>;
   refreshPlans: () => Promise<void>;
@@ -698,12 +701,12 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 const calculateTopicScores = (
   studyRecords: StudyRecord[],
   studyPlans: any[],
-  selectedDataFile: string,
-  availablePlans: string[]
+  selectedPlanId: string,
+  availablePlanIds: string[]
 ): TopicScore[] => {
   if (!studyPlans || studyPlans.length === 0) return [];
 
-  const currentPlanIndex = availablePlans.indexOf(selectedDataFile);
+  const currentPlanIndex = availablePlanIds.indexOf(selectedPlanId);
   if (currentPlanIndex === -1) return [];
   const currentPlanData = studyPlans[currentPlanIndex];
 
@@ -792,11 +795,18 @@ const calculateTopicScores = (
   }).sort((a, b) => b.score - a.score);
 };
 
+/**
+ * Chave nova de propósito: a v1 guardava aqui o nome do arquivo do plano
+ * (`"meu-plano.json"`), que não identifica nada na v2. Trocar a chave evita ler
+ * um valor legado que nunca casaria com um uuid.
+ */
+const SELECTED_PLAN_STORAGE_KEY = 'ouroboros.selectedPlanId';
+
 export const DataProvider = ({ children }: { children: ReactNode }) => {
   const { status: authStatus } = useAuth();
-  const [selectedDataFile, _setSelectedDataFile] = useState<string>('');
-  const [availablePlans, setAvailablePlans] = useState<string[]>([]);
-  const [studyPlans, setStudyPlans] = useState<any[]>([]);
+  const [selectedPlanId, _setSelectedPlanId] = useState<string>('');
+  const [availablePlanIds, setAvailablePlanIds] = useState<string[]>([]);
+  const [studyPlans, setStudyPlans] = useState<PlanData[]>([]);
   const [studyRecords, setStudyRecords] = useState<StudyRecord[]>([]);
   const [simuladoRecords, setSimuladoRecords] = useState<SimuladoRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -893,12 +903,25 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return { numCompletedCycles: 0, progressInCurrentCycle: 0, newSessionProgressMap: {}, totalCycleDuration: 0 };
   };
 
-  const setSelectedDataFile = useCallback((fileName: string) => {
-    if (fileName !== selectedDataFile) {
+  const setSelectedPlanId = useCallback((planId: string) => {
+    if (planId !== selectedPlanId) {
       setIsPlanDataLoaded(false);
-      _setSelectedDataFile(fileName);
+      _setSelectedPlanId(planId);
+      // A v1 lia essa chave na carga mas só a gravava ao excluir um plano, o
+      // que fazia a escolha do usuário se perder entre sessões.
+      if (planId) {
+        localStorage.setItem(SELECTED_PLAN_STORAGE_KEY, planId);
+      } else {
+        localStorage.removeItem(SELECTED_PLAN_STORAGE_KEY);
+      }
     }
-  }, [selectedDataFile]);
+  }, [selectedPlanId]);
+
+  /** O plano ativo já resolvido — evita o `availablePlanIds.indexOf(...)` espalhado pela UI. */
+  const selectedPlan = useMemo(
+    () => studyPlans.find(plan => plan.id === selectedPlanId) ?? null,
+    [studyPlans, selectedPlanId]
+  );
   
   const availableSubjects = useMemo(() => {
     const subjects = new Set<string>();
@@ -935,11 +958,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   });
 
   useEffect(() => {
-    if (isPlanDataLoaded && studyPlans.length > 0 && selectedDataFile) {
-      const scores = calculateTopicScores(studyRecords, studyPlans, selectedDataFile, availablePlans);
+    if (isPlanDataLoaded && studyPlans.length > 0 && selectedPlanId) {
+      const scores = calculateTopicScores(studyRecords, studyPlans, selectedPlanId, availablePlanIds);
       setTopicScores(scores);
     }
-  }, [studyRecords, studyPlans, selectedDataFile, availablePlans, isPlanDataLoaded]);
+  }, [studyRecords, studyPlans, selectedPlanId, availablePlanIds, isPlanDataLoaded]);
 
   const getRecommendedSession = useCallback((options: { forceSubject?: string | null } = {}) => {
     const { forceSubject } = options;
@@ -963,149 +986,133 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [topicScores, stats.editalData]);
 
+  /**
+   * Aplica ao estado local o ciclo que veio do banco.
+   *
+   * O `studyCycle` mais antigo era um objeto `{ groupA, groupB }`; os dados
+   * atuais são um array achatado. A leitura aceita os dois.
+   */
+  const applyCycleData = useCallback((cycleData: StudyCycleData) => {
+    const rawCycle = cycleData.studyCycle as any;
+    if (rawCycle && !Array.isArray(rawCycle) && (rawCycle.groupA || rawCycle.groupB)) {
+      setStudyCycle([...(rawCycle.groupA || []), ...(rawCycle.groupB || [])]);
+    } else {
+      setStudyCycle(cycleData.studyCycle);
+    }
+    setStudyHours(cycleData.studyHours);
+    setWeeklyQuestionsGoal(cycleData.weeklyQuestionsGoal);
+    setCurrentProgressMinutes(cycleData.currentProgressMinutes);
+    setSessionProgressMap(cycleData.sessionProgressMap);
+    setReminderNotes(cycleData.reminderNotes);
+    setStudyDays(cycleData.studyDays);
+    setCompletedCycles(cycleData.completedCycles || 0);
+    setCycleGenerationTimestamp(cycleData.cycleGenerationTimestamp || null);
+  }, []);
+
+  const resetCycleState = useCallback(() => {
+    setStudyCycle(null);
+    setStudyHours('40');
+    setWeeklyQuestionsGoal('250');
+    setCurrentProgressMinutes(0);
+    setSessionProgressMap({});
+    setReminderNotes([]);
+    setStudyDays(['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']);
+    setCompletedCycles(0);
+    setCycleGenerationTimestamp(null);
+  }, []);
+
   useEffect(() => {
-    async function loadPlansAndData() {
+    async function loadPlans() {
       setLoading(true);
-      const allPlanFiles = await getJsonFiles();
-      const planFiles = allPlanFiles.filter(plan => plan.toUpperCase() !== 'USERS.JSON');
-      setAvailablePlans(planFiles);
 
-      const planDataPromises = planFiles.map(file => getJsonContent(file));
-      const plansData = await Promise.all(planDataPromises);
-      setStudyPlans(plansData);
+      // Uma consulta traz todos os planos. Na v1 eram 1+N chamadas: listar o
+      // diretório e depois ler cada arquivo.
+      const plans = await getPlans();
+      setStudyPlans(plans);
+      setAvailablePlanIds(plans.map(plan => plan.id));
 
-      const lastSelected = localStorage.getItem('selectedDataFile');
-      let initialSelectedFile = '';
-      if (lastSelected && planFiles.includes(lastSelected)) {
-        initialSelectedFile = lastSelected;
-      } else if (planFiles.length > 0) {
-        initialSelectedFile = planFiles[0];
+      const lastSelected = localStorage.getItem(SELECTED_PLAN_STORAGE_KEY);
+      const initialPlanId =
+        lastSelected && plans.some(plan => plan.id === lastSelected)
+          ? lastSelected
+          : plans[0]?.id ?? '';
+
+      // O ciclo do plano inicial é carregado pelo efeito de baixo, que reage à
+      // seleção — carregá-lo aqui também duplicaria a consulta.
+      if (initialPlanId) {
+        setSelectedPlanId(initialPlanId);
       }
-      
-      if (initialSelectedFile) {
-        setSelectedDataFile(initialSelectedFile);
-        const serverCycleData = await getStudyCycleFromFile(initialSelectedFile);
-        if (serverCycleData) {
-          if (serverCycleData.studyCycle && (serverCycleData.studyCycle.groupA || serverCycleData.studyCycle.groupB)) {
-            const flatCycle = [...(serverCycleData.studyCycle.groupA || []), ...(serverCycleData.studyCycle.groupB || [])];
-            setStudyCycle(flatCycle);
-          } else {
-            setStudyCycle(serverCycleData.studyCycle);
-          }
-          setStudyHours(serverCycleData.studyHours);
-          setWeeklyQuestionsGoal(serverCycleData.weeklyQuestionsGoal);
-          setCurrentProgressMinutes(serverCycleData.currentProgressMinutes);
-          setSessionProgressMap(serverCycleData.sessionProgressMap);
-          setReminderNotes(serverCycleData.reminderNotes);
-          setStudyDays(serverCycleData.studyDays);
-          setCompletedCycles(serverCycleData.completedCycles || 0);
-          setCycleGenerationTimestamp(serverCycleData.cycleGenerationTimestamp || null);
-        }
-      }
+
       setLoading(false);
     }
-    
+
     if (authStatus === 'authenticated') {
-      loadPlansAndData();
+      loadPlans();
     } else if (authStatus === 'unauthenticated') {
-      setAvailablePlans([]);
+      setAvailablePlanIds([]);
       setStudyPlans([]);
       setStudyRecords([]);
       setReviewRecords([]);
       setSimuladoRecords([]);
-      _setSelectedDataFile('');
+      _setSelectedPlanId('');
+      resetCycleState();
       setLoading(false);
     }
-  }, [authStatus]);
+  }, [authStatus, resetCycleState]);
 
   useEffect(() => {
-    async function loadRecordsForSelectedFile() {
-      if (selectedDataFile && authStatus === 'authenticated') {
-        setLoading(true);
-        setIsPlanDataLoaded(false);
+    async function loadRecordsForSelectedPlan() {
+      if (!selectedPlanId || authStatus !== 'authenticated') return;
 
-        // Executa a migração ANTES de carregar os dados
-        const migrationResult = await migrateToSubjectIds(selectedDataFile);
-        if (migrationResult.error) {
-          showNotification(`Erro na migração de dados: ${migrationResult.error}`, 'error');
-        }
-        if (migrationResult.migrated) {
-          showNotification('Dados atualizados para a nova versão com sucesso!', 'success');
-          // Recarrega os dados do plano migrado para atualizar o estado
-          const newPlanContent = await getJsonContent(selectedDataFile);
-          if (newPlanContent) {
-            setStudyPlans(prevPlans => {
-              const planIndex = availablePlans.indexOf(selectedDataFile);
-              if (planIndex !== -1) {
-                const updatedPlans = [...prevPlans];
-                updatedPlans[planIndex] = newPlanContent;
-                return updatedPlans;
-              }
-              return prevPlans;
-            });
-          }
-        }
+      setLoading(true);
+      setIsPlanDataLoaded(false);
 
-        const records = await getStudyRecords(selectedDataFile);
-        setStudyRecords(records);
-        const reviews = await getReviewRecords(selectedDataFile);
-        setReviewRecords(reviews);
-        const simulados = await getSimuladoRecords(selectedDataFile);
-        setSimuladoRecords(simulados);
-        
-        const serverCycleData = await getStudyCycleFromFile(selectedDataFile);
-        if (serverCycleData) {
-          if (serverCycleData.studyCycle && (serverCycleData.studyCycle.groupA || serverCycleData.studyCycle.groupB)) {
-            const flatCycle = [...(serverCycleData.studyCycle.groupA || []), ...(serverCycleData.studyCycle.groupB || [])];
-            setStudyCycle(flatCycle);
-          } else {
-            setStudyCycle(serverCycleData.studyCycle);
-          }
-          setStudyHours(serverCycleData.studyHours);
-          setWeeklyQuestionsGoal(serverCycleData.weeklyQuestionsGoal);
-          setCurrentProgressMinutes(serverCycleData.currentProgressMinutes);
-          setSessionProgressMap(serverCycleData.sessionProgressMap);
-          setReminderNotes(serverCycleData.reminderNotes);
-          setStudyDays(serverCycleData.studyDays);
-          setCompletedCycles(serverCycleData.completedCycles || 0);
-          setCycleGenerationTimestamp(serverCycleData.cycleGenerationTimestamp || null);
-        } else {
-          setStudyCycle(null);
-          setStudyHours('40');
-          setWeeklyQuestionsGoal('250');
-          setCurrentProgressMinutes(0);
-          setSessionProgressMap({});
-          setReminderNotes([]);
-          setStudyDays(['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']);
-          setCompletedCycles(0);
-          setCycleGenerationTimestamp(null);
-        }
-        setLoading(false);
-        setIsPlanDataLoaded(true);
+      // A v1 rodava `migrateToSubjectIds` aqui, a cada seleção de plano, para
+      // dar ID às matérias e preencher `subjectId` nos registros antigos. O
+      // schema do Postgres já exige as duas coisas, e a conversão de dados da
+      // v1 acontece uma única vez, na restauração do backup.
+      const [records, reviews, simulados, cycleData] = await Promise.all([
+        getStudyRecords(selectedPlanId),
+        getReviewRecords(selectedPlanId),
+        getSimuladoRecords(selectedPlanId),
+        getStudyCycle(selectedPlanId),
+      ]);
+
+      setStudyRecords(records);
+      setReviewRecords(reviews);
+      setSimuladoRecords(simulados);
+
+      if (cycleData) {
+        applyCycleData(cycleData);
+      } else {
+        resetCycleState();
       }
+
+      setLoading(false);
+      setIsPlanDataLoaded(true);
     }
-    loadRecordsForSelectedFile();
-  }, [selectedDataFile, authStatus, showNotification]);
+
+    loadRecordsForSelectedPlan();
+  }, [selectedPlanId, authStatus, applyCycleData, resetCycleState]);
 
   useEffect(() => {
-    if (!loading && isPlanDataLoaded && selectedDataFile) {
-      const cycleData = {
+    if (!loading && isPlanDataLoaded && selectedPlanId) {
+      saveStudyCycle(selectedPlanId, {
         studyCycle, studyHours, weeklyQuestionsGoal, currentProgressMinutes,
         sessionProgressMap, reminderNotes, studyDays, completedCycles, cycleGenerationTimestamp
-      };
-      saveStudyCycleToFile(selectedDataFile, cycleData);
+      });
     }
-  }, [studyCycle, studyHours, weeklyQuestionsGoal, currentProgressMinutes, sessionProgressMap, reminderNotes, studyDays, completedCycles, cycleGenerationTimestamp, loading, isPlanDataLoaded, selectedDataFile]);
+  }, [studyCycle, studyHours, weeklyQuestionsGoal, currentProgressMinutes, sessionProgressMap, reminderNotes, studyDays, completedCycles, cycleGenerationTimestamp, loading, isPlanDataLoaded, selectedPlanId]);
 
   useEffect(() => {
     async function updateStats() {
-      if (studyPlans.length > 0 && availablePlans.length > 0 && selectedDataFile) {
-        const newStats = await calculateStats(studyRecords, selectedDataFile, activeFilters, studyPlans, availablePlans, consistencyOffset, studyDays, studyCycle);
+      if (studyPlans.length > 0 && availablePlanIds.length > 0 && selectedPlanId) {
+        const newStats = await calculateStats(studyRecords, selectedPlanId, activeFilters, studyPlans, availablePlanIds, consistencyOffset, studyDays, studyCycle);
         setStats(newStats);
       }
     }
     updateStats();
-  }, [studyRecords, selectedDataFile, activeFilters, studyPlans, availablePlans, consistencyOffset, studyDays, studyCycle]);
+  }, [studyRecords, selectedPlanId, activeFilters, studyPlans, availablePlanIds, consistencyOffset, studyDays, studyCycle]);
 
 
 
@@ -1115,21 +1122,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!studyCycle || !studyRecords || isAnimatingCompletion) return;
 
+    // Só contam para o ciclo atual os registros criados depois de ele ser
+    // gerado. A v1 lia o instante do próprio ID (`Date.now()-random`); com IDs
+    // uuid isso não existe mais, e a referência é o `created_at` da linha.
     const recordsToConsider = cycleGenerationTimestamp
       ? studyRecords.filter(r => {
-          // Tenta obter o timestamp preciso do ID do registro
-          const idParts = r.id.split('-');
-          const recordTimestamp = parseInt(idParts[0], 10);
-
-          // Se o ID contiver um timestamp válido, use-o para uma filtragem precisa
-          if (!isNaN(recordTimestamp)) {
-            return recordTimestamp >= cycleGenerationTimestamp;
+          if (r.createdAt) {
+            return new Date(r.createdAt).getTime() >= cycleGenerationTimestamp;
           }
 
-          // Fallback para registros mais antigos ou com formato de ID diferente
+          // Registro restaurado de um backup, sem `createdAt`: cai para a
+          // granularidade do dia, que é o que a data do registro oferece.
           const [year, month, day] = r.date.split('-').map(Number);
           const recordDate = new Date(Date.UTC(year, month - 1, day));
-          
+
           const cycleDate = new Date(cycleGenerationTimestamp);
           cycleDate.setUTCHours(0, 0, 0, 0);
 
@@ -1179,8 +1185,48 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isAnimatingCompletion, studyRecords, studyCycle, showNotification]);
 
+  /**
+   * Monta as revisões agendadas de um registro de estudo.
+   *
+   * Os IDs são uuid, e não `${studyRecordId}-${period}` como na v1: a coluna
+   * `review_records.id` é uuid, e o determinismo antigo servia só para que
+   * reeditar um registro sobrescrevesse as revisões dos mesmos períodos. Quem
+   * garante isso agora é `deleteReviewRecordsForStudyRecord`.
+   */
+  const buildReviewRecords = useCallback((record: StudyRecord): ReviewRecord[] => {
+    if (!record.reviewPeriods || record.reviewPeriods.length === 0) return [];
+
+    return record.reviewPeriods.map(period => {
+      const [year, month, day] = record.date.split('-').map(Number);
+      const originalDate = new Date(Date.UTC(year, month - 1, day));
+      const scheduledDate = new Date(originalDate);
+
+      if (period.endsWith('d')) {
+        scheduledDate.setUTCDate(originalDate.getUTCDate() + parseInt(period.slice(0, -1)));
+      } else if (period.endsWith('w')) {
+        scheduledDate.setUTCDate(originalDate.getUTCDate() + (parseInt(period.slice(0, -1)) * 7));
+      } else if (period.endsWith('m')) {
+        scheduledDate.setUTCMonth(originalDate.getUTCMonth() + parseInt(period.slice(0, -1)));
+      }
+
+      return {
+        id: crypto.randomUUID(),
+        studyRecordId: record.id,
+        scheduledDate: scheduledDate.toISOString().split('T')[0],
+        status: 'pending' as const,
+        originalDate: record.date,
+        subjectId: record.subjectId,
+        subject: record.subject,
+        topic: record.topic,
+        reviewPeriod: period,
+        completedDate: undefined,
+        ignored: false,
+      };
+    });
+  }, []);
+
   const addStudyRecord = useCallback(async (record: Omit<StudyRecord, 'id' | 'subjectId'> & { subject: string }) => {
-    if (!selectedDataFile) {
+    if (!selectedPlanId) {
       showNotification('Nenhum plano de estudos selecionado.', 'error');
       return;
     }
@@ -1190,145 +1236,113 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       showNotification(`Matéria "${record.subject}" não encontrada no plano de estudos.`, 'error');
       return;
     }
-    
-    const newRecord = { 
-      ...record, 
-      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      subjectId: subjectData.id
+
+    const newRecord: StudyRecord = {
+      ...record,
+      id: crypto.randomUUID(),
+      subjectId: subjectData.id,
+      // O banco preenche `created_at`, mas o filtro do ciclo roda antes da
+      // próxima leitura e precisa do valor já agora.
+      createdAt: new Date().toISOString(),
     };
-    
+
     try {
+      await saveStudyRecord(selectedPlanId, newRecord);
       setStudyRecords(prevRecords => [...prevRecords, newRecord]);
-      await saveStudyRecord(selectedDataFile, newRecord);
       showNotification('Registro de estudo salvo com sucesso!', 'success');
 
-      if (newRecord.reviewPeriods && newRecord.reviewPeriods.length > 0) {
-        const newReviewRecords: ReviewRecord[] = [];
-        newRecord.reviewPeriods.forEach(period => {
-          const [year, month, day] = newRecord.date.split('-').map(Number);
-          const originalDate = new Date(Date.UTC(year, month - 1, day));
-          let scheduledDate = new Date(originalDate);
-
-          if (period.endsWith('d')) {
-            scheduledDate.setUTCDate(originalDate.getUTCDate() + parseInt(period.slice(0, -1)));
-          } else if (period.endsWith('w')) {
-            scheduledDate.setUTCDate(originalDate.getUTCDate() + (parseInt(period.slice(0, -1)) * 7));
-          } else if (period.endsWith('m')) {
-            scheduledDate.setUTCMonth(originalDate.getUTCMonth() + parseInt(period.slice(0, -1)));
-          }
-
-          newReviewRecords.push({
-            id: `${newRecord.id}-${period}`, studyRecordId: newRecord.id,
-            scheduledDate: scheduledDate.toISOString().split('T')[0], status: 'pending',
-            originalDate: newRecord.date, subjectId: newRecord.subjectId, subject: newRecord.subject, topic: newRecord.topic,
-            reviewPeriod: period,
-          });
-        });
-
+      const newReviewRecords = buildReviewRecords(newRecord);
+      if (newReviewRecords.length > 0) {
+        await saveReviewRecords(selectedPlanId, newReviewRecords);
         setReviewRecords(prevReviews => [...prevReviews, ...newReviewRecords]);
-        for (const review of newReviewRecords) {
-          await saveReviewRecord(selectedDataFile, review);
-        }
       }
     } catch (error) {
       console.error("Falha ao salvar o registro de estudo:", error);
       showNotification('Erro ao salvar o registro. Tente novamente.', 'error');
     }
-  }, [selectedDataFile, showNotification, stats.editalData]);
+  }, [selectedPlanId, showNotification, stats.editalData, buildReviewRecords]);
 
   const addSimuladoRecord = useCallback(async (record: Omit<SimuladoRecord, 'id'>) => {
-    if (!selectedDataFile) {
+    if (!selectedPlanId) {
       showNotification('Nenhum plano de estudos selecionado para salvar o simulado.', 'error');
       return;
     }
-    const newRecord = { ...record, id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}` };
+    const newRecord: SimuladoRecord = { ...record, id: crypto.randomUUID() };
     try {
+      await saveSimuladoRecord(selectedPlanId, newRecord);
       setSimuladoRecords(prevRecords => [...prevRecords, newRecord]);
-      await saveSimuladoRecord(selectedDataFile, newRecord);
       showNotification('Simulado salvo com sucesso!', 'success');
     } catch (error) {
       console.error("Falha ao salvar o simulado:", error);
       showNotification('Erro ao salvar o simulado. Tente novamente.', 'error');
-      setSimuladoRecords(prevRecords => prevRecords.filter(r => r.id !== newRecord.id));
     }
-  }, [selectedDataFile, showNotification]);
+  }, [selectedPlanId, showNotification]);
 
   const updateSimuladoRecord = useCallback(async (record: SimuladoRecord) => {
-    if (!selectedDataFile) return;
+    if (!selectedPlanId) return;
     try {
-      await updateSimuladoRecordAction(selectedDataFile, record);
+      await saveSimuladoRecord(selectedPlanId, record);
       setSimuladoRecords(prevRecords => prevRecords.map(r => (r.id === record.id ? record : r)));
       showNotification('Simulado atualizado com sucesso!', 'success');
     } catch (error) {
       console.error("Falha ao atualizar o simulado:", error);
       showNotification('Erro ao atualizar o simulado. Tente novamente.', 'error');
     }
-  }, [selectedDataFile, showNotification]);
+  }, [selectedPlanId, showNotification]);
 
   const deleteSimuladoRecord = useCallback(async (id: string) => {
-    if (!selectedDataFile) return;
+    if (!selectedPlanId) return;
     try {
-      await deleteSimuladoRecordActionImport(selectedDataFile, id);
+      await deleteSimuladoRecordOnServer(selectedPlanId, id);
       setSimuladoRecords(prevRecords => prevRecords.filter(r => r.id !== id));
       showNotification('Simulado excluído com sucesso!', 'info');
     } catch (error) {
       console.error("Falha ao excluir o simulado:", error);
       showNotification('Erro ao excluir o simulado. Tente novamente.', 'error');
     }
-  }, [selectedDataFile, showNotification]);
+  }, [selectedPlanId, showNotification]);
 
   const updateStudyRecord = useCallback(async (record: StudyRecord) => {
-    if (!selectedDataFile) return;
-    await saveStudyRecord(selectedDataFile, record);
-    setStudyRecords(prevRecords => prevRecords.map(r => (r.id === record.id ? record : r)));
+    if (!selectedPlanId) return;
 
-    setReviewRecords(prevReviews => prevReviews.filter(r => r.studyRecordId !== record.id));
+    try {
+      await saveStudyRecord(selectedPlanId, record);
+      setStudyRecords(prevRecords => prevRecords.map(r => (r.id === record.id ? record : r)));
 
-    if (record.reviewPeriods && record.reviewPeriods.length > 0) {
-      const newReviewRecords: ReviewRecord[] = [];
-      record.reviewPeriods.forEach(period => {
-        const [year, month, day] = record.date.split('-').map(Number);
-        const originalDate = new Date(Date.UTC(year, month - 1, day)); 
-        let scheduledDate = new Date(originalDate);
+      // As revisões são reconstruídas do zero: o usuário pode ter removido um
+      // período, e com IDs uuid não há como sobrescrever os antigos.
+      await deleteReviewRecordsForStudyRecord(record.id);
+      setReviewRecords(prevReviews => prevReviews.filter(r => r.studyRecordId !== record.id));
 
-        if (period.endsWith('d')) {
-          scheduledDate.setUTCDate(originalDate.getUTCDate() + parseInt(period.slice(0, -1)));
-        } else if (period.endsWith('w')) {
-          scheduledDate.setUTCDate(originalDate.getUTCDate() + (parseInt(period.slice(0, -1)) * 7));
-        } else if (period.endsWith('m')) {
-          scheduledDate.setUTCMonth(originalDate.getUTCMonth() + parseInt(period.slice(0, -1)));
-        }
-
-        newReviewRecords.push({
-          id: `${record.id}-${period}`, studyRecordId: record.id,
-          scheduledDate: scheduledDate.toISOString().split('T')[0], status: 'pending',
-          originalDate: record.date, subjectId: record.subjectId, subject: record.subject, topic: record.topic,
-          reviewPeriod: period, completedDate: undefined, ignored: false,
-        });
-      });
-
-      for (const review of newReviewRecords) {
-        await saveReviewRecord(selectedDataFile, review);
+      const newReviewRecords = buildReviewRecords(record);
+      if (newReviewRecords.length > 0) {
+        await saveReviewRecords(selectedPlanId, newReviewRecords);
+        setReviewRecords(prevReviews => [...prevReviews, ...newReviewRecords]);
       }
-      setReviewRecords(prevReviews => [...prevReviews, ...newReviewRecords]);
+    } catch (error) {
+      console.error("Falha ao atualizar o registro de estudo:", error);
+      showNotification('Erro ao atualizar o registro. Tente novamente.', 'error');
     }
-  }, [selectedDataFile]);
+  }, [selectedPlanId, showNotification, buildReviewRecords]);
 
   const deleteStudyRecord = useCallback(async (id: string) => {
-    if (!selectedDataFile) return;
+    if (!selectedPlanId) return;
     try {
-      await deleteStudyRecordAction(selectedDataFile, id);
+      await deleteStudyRecordOnServer(selectedPlanId, id);
       setStudyRecords(prevRecords => prevRecords.filter(r => r.id !== id));
+      // O cascade da FK já apagou as revisões no banco.
+      setReviewRecords(prevReviews => prevReviews.filter(r => r.studyRecordId !== id));
     } catch (error) {
       console.error("Failed to delete study record:", error);
+      showNotification('Erro ao excluir o registro. Tente novamente.', 'error');
     }
-  }, [selectedDataFile]);
+  }, [selectedPlanId, showNotification]);
 
   const updateReviewRecord = useCallback(async (record: ReviewRecord) => {
-    if (!selectedDataFile) return;
-    await saveReviewRecord(selectedDataFile, record);
+    if (!selectedPlanId) return;
+    await saveReviewRecord(selectedPlanId, record);
     setReviewRecords(prevRecords => prevRecords.map(r => (r.id === record.id ? record : r)));
-  }, [selectedDataFile]);
+  }, [selectedPlanId]);
 
   const applyFilters = useCallback((filters: Filters) => {
     setActiveFilters(filters);
@@ -1453,8 +1467,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, [topicScores, showNotification]);
 
   const resetStudyCycle = useCallback(async () => {
-    if (selectedDataFile) {
-      await deleteStudyCycleFile(selectedDataFile);
+    if (selectedPlanId) {
+      await deleteStudyCycle(selectedPlanId);
     }
     setStudyCycle(null);
     setSessionProgressMap({});
@@ -1463,7 +1477,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setCycleGenerationTimestamp(null); // Adicionado para limpar o timestamp
     setStudyDays(['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']);
     showNotification('Planejamento removido. Você pode criar um novo ciclo.', 'success');
-  }, [selectedDataFile, showNotification]);
+  }, [selectedPlanId, showNotification]);
 
   const handleConsistencyNav = useCallback((direction: number) => {
     setConsistencyOffset(prev => prev + direction);
@@ -1523,11 +1537,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, [showNotification]);
 
   const updateTopicWeight = useCallback(async (subjectId: string, topicText: string, newWeight: number) => {
-    if (!selectedDataFile) return;
+    if (!selectedPlanId) return;
 
     // Otimistic UI update
     setStudyPlans(prevPlans => {
-      const planIndex = availablePlans.indexOf(selectedDataFile);
+      const planIndex = availablePlanIds.indexOf(selectedPlanId);
       if (planIndex === -1) return prevPlans;
 
       const newPlans = [...prevPlans];
@@ -1554,38 +1568,45 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       return newPlans;
     });
 
-    const result = await updateTopicWeightAction(selectedDataFile, subjectId, topicText, newWeight);
+    const result = await updateTopicWeightOnServer(selectedPlanId, subjectId, topicText, newWeight);
     if (!result.success) {
       showNotification('Erro ao salvar o peso do tópico.', 'error');
       // Reverter a alteração otimista seria ideal aqui, mas por simplicidade vamos recarregar.
       refreshPlans(); 
     }
-  }, [selectedDataFile, showNotification, availablePlans]);
+  }, [selectedPlanId, showNotification, availablePlanIds]);
 
-  const deletePlan = useCallback(async (fileName: string) => {
-    try {
-      await deleteJsonFile(fileName);
-      await deleteStudyCycleFile(fileName);
+  const deletePlan = useCallback(async (planId: string) => {
+    const planName = studyPlans.find(plan => plan.id === planId)?.name ?? 'plano';
 
-      const updatedPlans = availablePlans.filter(p => p !== fileName);
-      setAvailablePlans(updatedPlans);
-
-      if (selectedDataFile === fileName) {
-        const newSelectedFile = updatedPlans[0] || '';
-        setSelectedDataFile(newSelectedFile);
-        localStorage.setItem('selectedDataFile', newSelectedFile);
-        setStudyCycle(null);
-      }
-
-      showNotification(`Plano "${fileName}" e seu ciclo associado foram excluídos.`, 'success');
-    } catch (error) {
-      console.error("Falha ao excluir o plano:", error);
-      showNotification('Erro ao excluir o plano. Tente novamente.', 'error');
+    // O ciclo, os registros, as revisões e os simulados vão junto por cascade.
+    const result = await deletePlanOnServer(planId);
+    if (!result.success) {
+      console.error("Falha ao excluir o plano:", result.error);
+      showNotification(result.error || 'Erro ao excluir o plano. Tente novamente.', 'error');
+      return;
     }
-  }, [availablePlans, selectedDataFile, showNotification]);
+
+    const remainingIds = availablePlanIds.filter(id => id !== planId);
+    setAvailablePlanIds(remainingIds);
+    setStudyPlans(prevPlans => prevPlans.filter(plan => plan.id !== planId));
+
+    if (selectedPlanId === planId) {
+      const nextPlanId = remainingIds[0] || '';
+      setSelectedPlanId(nextPlanId);
+      if (nextPlanId) {
+        localStorage.setItem(SELECTED_PLAN_STORAGE_KEY, nextPlanId);
+      } else {
+        localStorage.removeItem(SELECTED_PLAN_STORAGE_KEY);
+        resetCycleState();
+      }
+    }
+
+    showNotification(`Plano "${planName}" e seu ciclo associado foram excluídos.`, 'success');
+  }, [availablePlanIds, selectedPlanId, showNotification, studyPlans, resetCycleState]);
 
   const renameSubject = useCallback(async (subjectId: string, newName: string) => {
-    if (!selectedDataFile) {
+    if (!selectedPlanId) {
       showNotification('Nenhum plano de estudos selecionado.', 'error');
       return;
     }
@@ -1603,12 +1624,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const result = await renameSubjectAction(selectedDataFile, subjectId, newName);
+      const result = await renameSubjectOnServer(selectedPlanId, subjectId, newName);
       if (result.success) {
         showNotification(`Matéria '${oldName}' renomeada para '${newName}' com sucesso!`, 'success');
         
         // Atualização otimista do estado para evitar o reload da página
-        const planIndex = availablePlans.indexOf(selectedDataFile);
+        const planIndex = availablePlanIds.indexOf(selectedPlanId);
         if (planIndex !== -1) {
           // 1. Atualiza studyPlans
           const updatedStudyPlans = [...studyPlans];
@@ -1629,11 +1650,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             rr.subjectId === subjectId ? { ...rr, subject: newName } : rr
           ));
 
-          // 4. Atualiza simuladoRecords
+          // 4. Atualiza simuladoRecords — a linha de simulado guarda só o
+          // nome da matéria, então o casamento é pelo nome antigo.
           setSimuladoRecords(prevSimulados => prevSimulados.map(sr => ({
             ...sr,
             subjects: sr.subjects.map(ss =>
-              ss.id === subjectId ? { ...ss, subjectName: newName } : ss
+              ss.name === oldName ? { ...ss, name: newName } : ss
             ),
           })));
         }
@@ -1653,72 +1675,64 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       console.error("Erro ao renomear matéria:", error);
       showNotification('Erro ao renomear matéria. Tente novamente.', 'error');
     }
-  }, [selectedDataFile, showNotification, stats.editalData]);
+  }, [selectedPlanId, showNotification, stats.editalData]);
 
 
 
   const exportAllData = useCallback(async () => {
-    const serverData = await exportFullBackupAction();
+    const serverData = await exportAllDataFromServer();
     const clientData = {
-      version: 3,
-      selectedDataFile, studyCycle, sessionProgressMap, completedCycles,
+      version: 4,
+      selectedPlanId, studyCycle, sessionProgressMap, completedCycles,
       currentProgressMinutes, studyHours, weeklyQuestionsGoal, studyDays, reminderNotes,
     };
     return { ...serverData, clientData };
   }, [
-    selectedDataFile, studyCycle, sessionProgressMap, completedCycles,
+    selectedPlanId, studyCycle, sessionProgressMap, completedCycles,
     currentProgressMinutes, studyHours, weeklyQuestionsGoal, studyDays, reminderNotes,
   ]);
 
   const importAllData = useCallback(async (data: any) => {
-    if (!data.clientData || !data.plans) {
+    if (!data || !data.plans) {
       throw new Error('Arquivo de backup inválido ou incompatível.');
     }
 
-    // A ação do servidor agora lida com a restauração de todos os arquivos, incluindo os ciclos
-    const result = await restoreFullBackupAction(data);
-
-    if (result.success) {
-      // Após a restauração bem-sucedida, atualizamos o estado do cliente a partir do backup
-      const { clientData } = data;
-      localStorage.setItem('selectedDataFile', clientData.selectedDataFile || '');
-      // As outras restaurações de estado (setStudyCycle, etc.) são tratadas pelo reload
-      // que acionará os useEffects para carregar os dados dos arquivos restaurados.
-      
-      showNotification('Backup restaurado com sucesso! A página será recarregada.', 'success');
-
-      // Recarregar a página para que todos os componentes releiam os novos dados do zero
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000); // Pequeno delay para garantir que a notificação seja visível
-
-    } else {
-      throw new Error(result.error || 'Falha ao restaurar o backup no servidor.');
+    const result = await restoreBackup(data);
+    if (!result.success) {
+      throw new Error(result.error || 'Falha ao restaurar o backup.');
     }
+
+    // O plano selecionado no backup era um nome de arquivo na v1 e é um uuid
+    // que acabou de ser recriado na v2 — nos dois casos a referência morreu na
+    // restauração. O loader escolhe o primeiro plano.
+    localStorage.removeItem(SELECTED_PLAN_STORAGE_KEY);
+
+    showNotification('Backup restaurado com sucesso! A página será recarregada.', 'success');
+
+    // Recarrega para que todos os componentes releiam os dados do zero.
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   }, [showNotification]);
 
   const refreshPlans = useCallback(async () => {
     if (authStatus !== 'authenticated') return;
     setLoading(true);
-    const allPlanFiles = await getJsonFiles();
-    const planFiles = allPlanFiles.filter(plan => plan.toUpperCase() !== 'USERS.JSON');
-    setAvailablePlans(planFiles);
-
-    const planDataPromises = planFiles.map(file => getJsonContent(file));
-    const plansData = await Promise.all(planDataPromises);
-    setStudyPlans(plansData);
+    const plans = await getPlans();
+    setStudyPlans(plans);
+    setAvailablePlanIds(plans.map(plan => plan.id));
     setLoading(false);
   }, [authStatus]);
 
   const saveSubject = useCallback(async (subjectData: { id?: string; subject: string; topics: EditalTopic[]; color: string }) => {
-    if (!selectedDataFile) {
+    if (!selectedPlanId) {
       const errorMsg = 'Nenhum plano de estudos selecionado.';
       showNotification(errorMsg, 'error');
       return { success: false, error: errorMsg };
     }
 
     try {
-      const result = await addOrUpdateSubjectAction(selectedDataFile, subjectData);
+      const result = await addOrUpdateSubject(selectedPlanId, subjectData);
       if (result.success) {
         showNotification(`Matéria "${subjectData.subject}" salva com sucesso!`, 'success');
         await refreshPlans();
@@ -1733,40 +1747,35 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       showNotification(errorMsg, 'error');
       return { success: false, error: errorMsg };
     }
-  }, [selectedDataFile, showNotification, refreshPlans]);
+  }, [selectedPlanId, showNotification, refreshPlans]);
 
   const clearAllData = useCallback(async () => {
-    try {
-      await clearAllDataAction();
-      // Limpa o estado local para refletir a remoção dos dados
-      _setSelectedDataFile('');
-      setAvailablePlans([]);
-      setStudyPlans([]);
-      setStudyRecords([]);
-      setSimuladoRecords([]);
-      setReviewRecords([]);
-      setStudyCycle(null);
-      setSessionProgressMap({});
-      setCompletedCycles(0);
-      setCurrentProgressMinutes(0);
-      setReminderNotes([]);
-      localStorage.removeItem('selectedDataFile');
-      
-      showNotification('Todos os dados foram apagados com sucesso! A página será recarregada.', 'success');
-
-      // Recarrega a página para um estado limpo
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
-    } catch (error) {
-      console.error("Falha ao limpar todos os dados:", error);
-      showNotification('Erro ao apagar os dados. Tente novamente.', 'error');
+    const result = await clearAllDataOnServer();
+    if (!result.success) {
+      console.error("Falha ao limpar todos os dados:", result.error);
+      showNotification(result.error || 'Erro ao apagar os dados. Tente novamente.', 'error');
+      return;
     }
-  }, [showNotification]);
+
+    _setSelectedPlanId('');
+    setAvailablePlanIds([]);
+    setStudyPlans([]);
+    setStudyRecords([]);
+    setSimuladoRecords([]);
+    setReviewRecords([]);
+    resetCycleState();
+    localStorage.removeItem(SELECTED_PLAN_STORAGE_KEY);
+
+    showNotification('Todos os dados foram apagados com sucesso! A página será recarregada.', 'success');
+
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+  }, [showNotification, resetCycleState]);
 
   return (
     <DataContext.Provider value={{
-      selectedDataFile, setSelectedDataFile, availablePlans, studyPlans,
+      selectedPlanId, setSelectedPlanId, availablePlanIds, studyPlans, selectedPlan,
       studyRecords, reviewRecords, simuladoRecords, stats, addStudyRecord,
       addSimuladoRecord, updateStudyRecord, deleteStudyRecord, updateReviewRecord,
       updateSimuladoRecord, deleteSimuladoRecord, applyFilters, studyCycle,

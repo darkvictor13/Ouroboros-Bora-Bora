@@ -7,14 +7,14 @@ import AddSimuladoModal from '../../components/AddSimuladoModal';
 import SimuladoCard from '../../components/SimuladoCard';
 import SimuladoLineChart from '../../components/SimuladoLineChart';
 import { useData } from '../../context/DataContext';
-import { SimuladoRecord } from '../../app/actions';
+import type { SimuladoRecord } from '@/lib/data';
 import ConfirmationModal from '../../components/ConfirmationModal';
 
 export default function SimuladosPage() {
   const { simuladoRecords, deleteSimuladoRecord } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSimulado, setEditingSimulado] = useState<SimuladoRecord | null>(null);
-  const [chartType, setChartType] = useState('desempenho'); // 'desempenho' ou 'pontuacao'
+  const [chartType, setChartType] = useState<'desempenho' | 'pontuacao'>('desempenho');
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [simuladoToDelete, setSimuladoToDelete] = useState<SimuladoRecord | null>(null);
 

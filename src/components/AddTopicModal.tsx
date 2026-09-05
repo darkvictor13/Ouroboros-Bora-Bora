@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useNotification } from '../context/NotificationContext';
 
-import { Topic } from '../app/planos/[fileName]/page'; // Importar a interface Topic
+import type { EditalTopic as Topic } from '@/lib/data';
 
 interface AddTopicModalProps {
   isOpen: boolean;

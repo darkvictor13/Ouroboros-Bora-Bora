@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import AddTopicModal from './AddTopicModal'; // Import AddTopicModal
 import { FaArrowUp, FaArrowDown, FaEdit, FaTrash } from 'react-icons/fa'; // Importar ícones
 import { useNotification } from '../context/NotificationContext';
-import { Topic } from '../app/planos/[fileName]/page'; // Importar a interface Topic
+import type { EditalTopic as Topic } from '@/lib/data';
 
 interface Subject {
   subject: string;

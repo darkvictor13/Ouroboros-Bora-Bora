@@ -12,6 +12,8 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import type { ChartOptions } from 'chart.js';
+import { useTheme } from '../context/ThemeContext';
 
 
 
@@ -23,6 +25,17 @@ interface SimuladoLineChartProps {
 }
 
 export default function SimuladoLineChart({ labels, performanceData, scoreData, chartType }: SimuladoLineChartProps) {
+  // As cores eram funções `(context) => ...` que liam a classe `dark` do
+  // <html>. O chart.js não trata `color` como opção scriptable nesses pontos,
+  // então o valor renderizado era a própria função. Com o tema vindo do
+  // contexto, são strings — e o gráfico redesenha quando o tema muda.
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const strongText = isDark ? '#E5E7EB' : '#111827';
+  const mutedText = isDark ? '#D1D5DB' : '#374151';
+  const gridColor = isDark ? '#4B5563' : '#E5E7EB';
+  const surface = isDark ? '#334155' : '#F9FAFB';
+
   const data = {
     labels,
     datasets: [
@@ -39,7 +52,7 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
     ],
   };
 
-  const options = {
+  const options: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
     animation: {
@@ -54,9 +67,7 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
             size: 14,
             weight: 'bold',
           },
-          color: (context) => {
-            return document.documentElement.classList.contains('dark') ? '#E5E7EB' : '#111827'; // gray-200 for dark, gray-900 for light
-          },
+          color: strongText,
         },
       },
       title: {
@@ -66,14 +77,10 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
           size: 18,
           weight: 'bold',
         },
-        color: (context) => {
-          return document.documentElement.classList.contains('dark') ? '#E5E7EB' : '#111827'; // gray-200 for dark, gray-900 for light
-        },
+        color: strongText,
       },
       tooltip: {
-        backgroundColor: (context) => {
-          return document.documentElement.classList.contains('dark') ? '#334155' : '#F9FAFB'; // slate-700 for dark, gray-50 for light
-        },
+        backgroundColor: surface,
         titleFont: {
           size: 16,
           weight: 'bold',
@@ -85,12 +92,8 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
         borderWidth: 1,
         cornerRadius: 8,
         displayColors: false, // Hide color box in tooltip
-        titleColor: (context) => {
-          return document.documentElement.classList.contains('dark') ? '#E5E7EB' : '#111827'; // gray-200 for dark, gray-900 for light
-        },
-        bodyColor: (context) => {
-          return document.documentElement.classList.contains('dark') ? '#D1D5DB' : '#374151'; // gray-300 for dark, gray-700 for light
-        },
+        titleColor: strongText,
+        bodyColor: mutedText,
       },
     },
     scales: {
@@ -102,20 +105,16 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
             size: 14,
             weight: 'bold',
           },
-          color: (context) => {
-            return document.documentElement.classList.contains('dark') ? '#E5E7EB' : '#111827'; // gray-200 for dark, gray-900 for light
-          },
+          color: strongText,
         },
         grid: {
-          color: (context) => {
-            return document.documentElement.classList.contains('dark') ? '#4B5563' : '#E5E7EB'; // gray-600 for dark, gray-200 for light
-          },
-          borderColor: '#E5E7EB', // gray-200
+          color: gridColor,
+        },
+        border: {
+          color: gridColor,
         },
         ticks: {
-          color: (context) => {
-            return document.documentElement.classList.contains('dark') ? '#E5E7EB' : '#111827'; // gray-200 for dark, gray-900 for light
-          },
+          color: strongText,
           font: {
             size: 12,
           },
@@ -129,21 +128,17 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
             size: 14,
             weight: 'bold',
           },
-          color: (context) => {
-            return document.documentElement.classList.contains('dark') ? '#E5E7EB' : '#111827'; // gray-200 for dark, gray-900 for light
-          },
+          color: strongText,
         },
         beginAtZero: true,
         grid: {
-          color: (context) => {
-            return document.documentElement.classList.contains('dark') ? '#4B5563' : '#E5E7EB'; // gray-600 for dark, gray-200 for light
-          },
-          borderColor: '#E5E7EB', // gray-200
+          color: gridColor,
+        },
+        border: {
+          color: gridColor,
         },
         ticks: {
-          color: (context) => {
-            return document.documentElement.classList.contains('dark') ? '#E5E7EB' : '#111827'; // gray-200 for dark, gray-900 for light
-          },
+          color: strongText,
           font: {
             size: 12,
           },

@@ -12,7 +12,8 @@ interface StudySession {
 interface DonutChartProps {
   cycle: StudySession[];
   size?: number;
-  studyHours: string;
+  /** Horas semanais da meta. Chega como número de `stats.weeklyHours`. */
+  studyHours: string | number;
   hoveredSession: number | null;
   setHoveredSession: (index: number | null) => void;
   sessionProgressMap: { [key: string]: number };
@@ -28,8 +29,8 @@ const DonutChart: React.FC<DonutChartProps> = ({ cycle, size = 300, studyHours, 
   const mainCircumference = 2 * Math.PI * mainRingRadius;
   const progressCircumference = 2 * Math.PI * progressRingRadius;
 
-  const formatStudyHours = (hours: string) => {
-    const hoursInt = parseInt(hours, 10);
+  const formatStudyHours = (hours: string | number) => {
+    const hoursInt = typeof hours === 'number' ? Math.round(hours) : parseInt(hours, 10);
     if (isNaN(hoursInt)) return '0h00min';
     return `${hoursInt}h00min`;
   };

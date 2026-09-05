@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useData } from '../context/DataContext';
-import { FaTrash } from 'react-icons/fa';
 
 export default function PlanSelector() {
-  const { selectedDataFile, setSelectedDataFile, availablePlans, deletePlan } = useData();
+  // O rótulo vem de `plan.name`. Na v1 vinha do nome do arquivo, que era a
+  // própria chave do plano; com o id em uuid, a chave não é mais legível.
+  const { selectedPlanId, setSelectedPlanId, studyPlans, selectedPlan } = useData();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -21,23 +22,6 @@ export default function PlanSelector() {
     };
   }, []);
 
-  const handleDeleteClick = (e: React.MouseEvent, planToDelete: string) => {
-    e.stopPropagation();
-    if (window.confirm(`Tem certeza que deseja excluir o plano "${planToDelete.replace('.json', '')}"? Esta ação não pode ser desfeita.`)) {
-      deletePlan(planToDelete);
-    }
-  };
-
-  const handleDeselectClick = () => {
-    setIsDeselectConfirmModalOpen(true);
-  };
-
-  const handleConfirmDeselect = () => {
-    setSelectedDataFile(null); // Deseleciona o plano
-    setIsDeselectConfirmModalOpen(false);
-    setIsDropdownOpen(false); // Fecha o dropdown após deselecionar
-  };
-
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -46,7 +30,7 @@ export default function PlanSelector() {
                 className="bg-white dark:bg-gray-800 border border-gold-500 dark:border-gold-600 rounded-full py-2 px-4 text-gold-500 dark:text-gold-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-md text-base font-medium appearance-none pr-8 w-full flex justify-between items-center"
       >
         <span className="block truncate">
-          {selectedDataFile ? selectedDataFile.replace('.json', '').toUpperCase() : 'Selecione o Plano'}
+          {selectedPlan ? selectedPlan.name.toUpperCase() : 'Selecione o Plano'}
         </span>
         <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
           <svg className="h-5 w-5 text-gray-400 dark:text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -56,18 +40,18 @@ export default function PlanSelector() {
       </button>
       {isDropdownOpen && (
         <div className="absolute z-20 bottom-full mb-2 w-full bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
-          {availablePlans.map((plan) => (
+          {studyPlans.map((plan) => (
             <div
-              key={plan}
+              key={plan.id}
               onClick={() => {
-                setSelectedDataFile(plan);
+                setSelectedPlanId(plan.id);
                 setIsDropdownOpen(false);
               }}
               className="text-gray-900 dark:text-gray-100 cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gold-100 dark:hover:bg-gray-700 flex items-center justify-between"
             >
               <span className="block whitespace-normal">
-                {plan.replace('.json', '').toUpperCase()}
-                {plan === selectedDataFile && <span className="ml-2 text-gold-500 dark:text-gold-400 font-semibold">(Ativo)</span>}
+                {plan.name.toUpperCase()}
+                {plan.id === selectedPlanId && <span className="ml-2 text-gold-500 dark:text-gold-400 font-semibold">(Ativo)</span>}
               </span>
             </div>
           ))}

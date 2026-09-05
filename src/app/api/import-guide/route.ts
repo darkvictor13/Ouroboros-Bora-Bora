@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
 import { getAuthenticatedUser } from '@/lib/supabase/server';
-import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch'; // Importa node-fetch no topo
 import crypto from 'crypto'; // Importa a biblioteca crypto para gerar UUIDs
@@ -36,32 +35,8 @@ interface PlanData {
   };
 }
 
-// Função para criar um nome de arquivo seguro
-function slugify(text: string): string {
-  if (!text) return '';
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w\-]+/g, '')
-    .replace(/--+/g, '-');
-}
-
-// Lógica de getUserDataDirectory duplicada aqui para garantir que funcione no build de produção
-async function getImportUserDataDirectory(): Promise<string> {
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    throw new Error('Usuário não autenticado na função de diretório de dados.');
-  }
-  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
-  const userDir = path.join(dataDir, user.id);
-  await fs.mkdir(userDir, { recursive: true });
-  return userDir;
-}
-
 // Função para converter URL de imagem para Base64
-async function urlToBase64(url: string): Promise<string | undefined> {
+async function urlToBase64(url: string | undefined): Promise<string | undefined> {
   if (!url) return undefined;
   try {
     const response = await fetch(url);
@@ -99,7 +74,9 @@ export async function POST(req: Request) {
 
     let executablePath: string | undefined;
     if (process.env.NODE_ENV === 'production') {
-      const resourcesPath = process.resourcesPath;
+      // `resourcesPath` só existe quando o processo roda dentro do Electron,
+      // que é o único caso em que a importação de guia está disponível.
+      const resourcesPath = (process as NodeJS.Process & { resourcesPath: string }).resourcesPath;
       const cachePath = path.join(resourcesPath, '.cache', 'puppeteer', 'chrome');
       
       if (process.platform === 'win32') {
@@ -132,7 +109,15 @@ export async function POST(req: Request) {
     await page.waitForSelector('div.guias-cabecalho, div.cadernos-agrupamento, div.detalhes-cabecalho', { timeout: 30000 });
     console.log('Página do guia carregada.');
 
-    const headerData = await page.evaluate(() => {
+    const headerData: {
+      name: string;
+      cargo: string;
+      edital: string;
+      // Sai da página como URL do CDN do TEC e é convertido para data: URI
+      // logo abaixo; fica indefinido se o download falhar.
+      iconUrl?: string;
+      banca: string;
+    } = await page.evaluate(() => {
         let name = document.querySelector('div.guias-cabecalho-concurso-nome')?.textContent?.trim() || 
                    document.querySelector('div.detalhes-cabecalho-informacoes-texto h1 span:not([class])')?.textContent?.trim() || 
                    document.title.split('-')[0].trim();
@@ -157,8 +142,8 @@ export async function POST(req: Request) {
     if (base64IconUrl) {
         headerData.iconUrl = base64IconUrl;
     } else {
-        // Se não conseguir converter, remove a URL para não tentar carregar uma URL externa
-        delete headerData.iconUrl;
+        // Sem conversão, não devolve URL externa nenhuma.
+        headerData.iconUrl = undefined;
     }
 
     const subjectLinks = await page.evaluate(() => {
@@ -307,15 +292,10 @@ export async function POST(req: Request) {
     const bancaTopicWeights = extractTopicWeights(finalSubjects);
     const planData: PlanData = { ...headerData, subjects: finalSubjects, bancaTopicWeights };
 
-    const userDir = await getImportUserDataDirectory(); // Usa a função duplicada
-    
-    const fileName = `${slugify(planData.name)}.json`;
-    const filePath = path.join(userDir, fileName);
-
-    await fs.writeFile(filePath, JSON.stringify(planData, null, 2), 'utf-8');
-    console.log(`Plano salvo em: ${filePath}`);
-
-    return NextResponse.json({ message: 'Guia importado com sucesso!', plan: planData });
+    // A rota não grava mais nada: ela raspa e devolve. Quem cria o plano é o
+    // `ImportGuideForm`, pelo Supabase, com o JWT do próprio usuário — não
+    // haveria como este processo escrever no banco sob a RLS dele.
+    return NextResponse.json({ message: 'Guia lido com sucesso!', plan: planData });
 
   } catch (error) {
     console.error('Ocorreu um erro no endpoint de importação:', error);

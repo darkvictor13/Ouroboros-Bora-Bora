@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import { PlanData, updateAllTopicWeightsAction, renameSubjectAction } from '../app/actions';
+import { updateAllTopicWeights } from '@/lib/data';
+import type { PlanData } from '@/lib/data';
 import { useNotification } from '../context/NotificationContext';
 import { FaMagic, FaTools, FaSearch, FaTimes, FaStar, FaClock, FaCalendarAlt, FaHourglassHalf, FaQuestionCircle, FaCheckCircle, FaCopy, FaHandSparkles } from 'react-icons/fa';
 import TopicWeightsModal from './TopicWeightsModal';
@@ -51,7 +52,7 @@ interface CycleCreationModalProps {
 const CycleCreationModal: React.FC<CycleCreationModalProps> = ({ isOpen, onClose, isEditing = false, initialData }) => {
   const { 
     generateStudyCycle, 
-    selectedDataFile, 
+    selectedPlanId, 
     setStudyCycle, 
     setCurrentProgressMinutes, 
     setCompletedCycles, 
@@ -63,7 +64,7 @@ const CycleCreationModal: React.FC<CycleCreationModalProps> = ({ isOpen, onClose
     setStudyDays: setContextStudyDays,
     stats,
     studyPlans,
-    availablePlans,
+    availablePlanIds,
     updateTopicWeight, // Usaremos a função do contexto para otimismo
     refreshPlans
   } = useData();
@@ -75,9 +76,9 @@ const CycleCreationModal: React.FC<CycleCreationModalProps> = ({ isOpen, onClose
   // Os dados agora vêm diretamente do DataContext
   const subjects = useMemo(() => stats.editalData || [], [stats.editalData]);
   const currentPlan = useMemo(() => {
-    const planIndex = availablePlans.indexOf(selectedDataFile);
+    const planIndex = availablePlanIds.indexOf(selectedPlanId);
     return planIndex !== -1 ? studyPlans[planIndex] : null;
-  }, [selectedDataFile, availablePlans, studyPlans]);
+  }, [selectedPlanId, availablePlanIds, studyPlans]);
   const bancaTopicWeights = useMemo(() => currentPlan?.bancaTopicWeights || null, [currentPlan]);
 
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
@@ -388,12 +389,16 @@ const CycleCreationModal: React.FC<CycleCreationModalProps> = ({ isOpen, onClose
       selectedSubjectIds.forEach(subjectId => {
         const subjectIndex = updatedSubjects.findIndex(s => s.id === subjectId);
         if (subjectIndex !== -1) {
-          updatedSubjects[subjectIndex].topics = updateTopicRecursively(updatedSubjects[subjectIndex].topics, subjectId);
+          // A árvore devolvida é descartada: o que interessa é o efeito
+          // colateral, que preenche `newWeightsMap`. Quem persiste é o
+          // `updateAllTopicWeights` logo abaixo, e a UI recarrega por
+          // `refreshPlans`.
+          updateTopicRecursively(updatedSubjects[subjectIndex].topics, subjectId);
         }
       });
 
       if (Object.keys(newWeightsMap).length > 0) {
-        await updateAllTopicWeightsAction(selectedDataFile, newWeightsMap);
+        await updateAllTopicWeights(selectedPlanId, newWeightsMap);
         await refreshPlans();
       }
 

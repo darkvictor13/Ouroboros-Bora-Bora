@@ -3,6 +3,32 @@
 import React, { useState } from 'react';
 import { useNotification } from '../context/NotificationContext';
 import { useData } from '../context/DataContext';
+import { createPlan } from '@/lib/data';
+
+/**
+ * O ícone chega da rota como data: URI (ela baixa a imagem do CDN do TEC pelo
+ * servidor, para escapar do CORS). Aqui ele vira um `File` para subir ao
+ * Storage — o plano não guarda mais a imagem embutida.
+ */
+function dataUrlToFile(dataUrl: unknown, planName: string): File | undefined {
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return undefined;
+
+  try {
+    const [header, base64] = dataUrl.split(',');
+    const mimeType = header.match(/data:([^;]+)/)?.[1] ?? 'image/png';
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    const extension = mimeType.split('/')[1] ?? 'png';
+    return new File([bytes], `${planName || 'plano'}.${extension}`, { type: mimeType });
+  } catch (error) {
+    // Um ícone ilegível não deve impedir a importação do edital inteiro.
+    console.error('Falha ao converter o ícone do guia:', error);
+    return undefined;
+  }
+}
 
 const ImportGuideForm = () => {
   const { refreshPlans } = useData();
@@ -35,9 +61,27 @@ const ImportGuideForm = () => {
         throw new Error(result.error || 'Ocorreu um erro desconhecido.');
       }
 
-      showNotification(result.message || 'Guia importado com sucesso!', 'success');
+      // A rota só raspa a página: ela roda no processo do Next e não tem o JWT
+      // do usuário, então quem grava o plano é o browser, sob a RLS dele.
+      const plan = result.plan;
+      const created = await createPlan({
+        name: plan.name,
+        observations: '',
+        cargo: plan.cargo ?? '',
+        edital: plan.edital ?? '',
+        banca: plan.banca ?? '',
+        subjects: plan.subjects ?? [],
+        bancaTopicWeights: plan.bancaTopicWeights ?? {},
+        iconFile: dataUrlToFile(plan.iconUrl, plan.name),
+      });
+
+      if (!created.success) {
+        throw new Error(created.error || 'Falha ao salvar o plano importado.');
+      }
+
+      showNotification('Guia importado com sucesso!', 'success');
       setGuideUrl('');
-      await refreshPlans(); // Recarrega os planos
+      await refreshPlans();
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Falha na comunicação com o servidor.';

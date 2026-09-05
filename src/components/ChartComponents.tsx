@@ -2,15 +2,27 @@
 
 import React, { useEffect, useState } from 'react';
 import { Doughnut } from 'react-chartjs-2';
-import { Chart, TooltipItem } from 'chart.js';
+import { Chart, ChartOptions, TooltipItem } from 'chart.js';
+
+/**
+ * Opção fora do vocabulário do chart.js, lida só pelo plugin abaixo. Declarada
+ * à parte porque `ChartOptions` não conhece `elements.center`.
+ */
+interface CenterTextConfig {
+  text: string;
+  color?: string;
+  fontStyle?: string;
+  fontSize: number;
+}
 
 const centerTextPlugin = {
   id: 'centerText',
   beforeDraw(chart: Chart) {
-    if (chart.config.options.elements && chart.config.options.elements.center) {
+    const centerConfig = (chart.config.options?.elements as { center?: CenterTextConfig } | undefined)?.center;
+
+    if (centerConfig) {
       // Get context and parameters
       const ctx = chart.ctx;
-      const centerConfig = chart.config.options.elements.center;
       const fontStyle = centerConfig.fontStyle || 'Arial';
       const txt = centerConfig.text;
       const color = centerConfig.color || '#000';
@@ -64,7 +76,11 @@ const ChartComponents: React.FC<ChartComponentsProps> = ({ stats }) => {
 
   const correctPercentage = stats.totalQuestions > 0 ? ((stats.totalCorrectQuestions / stats.totalQuestions) * 100).toFixed(1) : '0.0';
 
-  const doughnutOptions = {
+  // O `elements.center` não pertence ao tipo do chart.js — ele é lido pelo
+  // `centerTextPlugin` daqui de cima.
+  const doughnutOptions: ChartOptions<'doughnut'> & {
+    elements: { center: CenterTextConfig };
+  } = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {

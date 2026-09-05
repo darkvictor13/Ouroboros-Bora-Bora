@@ -40,8 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# generated data
-data/
+# dados gerados pela v1 (DATA_DIR). Ancorado na raiz de propósito: sem a barra
+# inicial, o padrão também casava `src/lib/data/`, que é código.
+/data/
 
 # build artifacts and cache
 /.cache/

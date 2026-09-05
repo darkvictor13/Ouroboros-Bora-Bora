@@ -3,43 +3,27 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { FaPlusCircle, FaCaretDown, FaCaretRight } from 'react-icons/fa';
-import { getJsonContent, getStudyRecords, StudyRecord } from '../../actions';
+import { getPlan, getStudyRecords } from '@/lib/data';
+import type { EditalSubject, EditalTopic, PlanData } from '@/lib/data';
+import type { StudyRecord } from '@/lib/data';
 import { useData } from '../../../context/DataContext';
 import { useTheme } from '../../../context/ThemeContext';
 import StudyRegisterModal from '../../../components/StudyRegisterModal';
 
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale } from 'chart.js';
+import type { ChartOptions } from 'chart.js';
 import 'chartjs-adapter-date-fns';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale);
 
 // Interfaces
-interface PlanData {
-  name: string;
-  observations: string;
-  cargo?: string;
-  edital?: string;
-  iconUrl?: string;
-  subjects: Subject[];
-  bancaTopicWeights?: {
-    [subjectName: string]: {
-      [topicText: string]: number; // Weight from 1 to 5
-    };
-  };
-}
+type Subject = EditalSubject;
+type Topic = EditalTopic;
 
-interface Subject {
-  subject: string;
-  topics: Topic[];
-  color: string;
-}
-
-interface Topic {
-  topic_number?: string;
-  topic_text: string;
-  sub_topics?: Topic[];
-}
+/** Total de páginas cobertas pelos intervalos gravados no registro. */
+const countPagesRead = (pages: { start: number; end: number }[]) =>
+  pages.reduce((acc, page) => acc + (page.end - page.start + 1), 0);
 
 // Função auxiliar para formatar o tempo
 const formatTime = (milliseconds: number) => {
@@ -76,51 +60,6 @@ const countStudiedTopicsRecursively = (topics: Topic[], studiedTopicTexts: Set<s
   return count;
 };
 
-// Função para normalizar os dados do plano
-const normalizePlanData = (data: PlanData | Subject[] | null, fileName: string): PlanData => {
-  const defaultColor = '#94A3B8';
-
-  if (Array.isArray(data)) {
-    const subjectsWithColors = data.map(subject => ({
-      ...subject,
-      color: subject.color || defaultColor,
-    }));
-    return {
-      name: fileName.replace('.json', '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-      observations: '',
-      cargo: '',
-      edital: '',
-      iconUrl: undefined,
-      subjects: subjectsWithColors,
-    };
-  }
-
-  if (data && typeof data === 'object' && !Array.isArray(data)) {
-    const subjects = Array.isArray(data.subjects) ? data.subjects : [];
-    const subjectsWithColors = subjects.map((subject: Subject) => ({
-      ...subject,
-      color: subject.color || defaultColor,
-    }));
-    return {
-      ...data,
-      name: data.name || fileName.replace('.json', '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-      observations: data.observations || '',
-      cargo: (data as any).cargo || '',
-      edital: (data as any).edital || '',
-      subjects: subjectsWithColors,
-    };
-  }
-
-  return {
-    name: fileName.replace('.json', '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-    observations: '',
-    cargo: '',
-    edital: '',
-    iconUrl: undefined,
-    subjects: [],
-  };
-};
-
 const flattenTopicsWithLevel = (topics: Topic[], level = 0): (Topic & { level: number })[] => {
   let flattened: (Topic & { level: number })[] = [];
   for (const topic of topics) {
@@ -136,7 +75,7 @@ export default function MateriaDetalhes() {
   const params = useParams();
   const searchParams = useSearchParams();
   const subjectName = decodeURIComponent(params.subjectName as string);
-  const initialFileName = searchParams.get('plan');
+  const initialPlanId = searchParams.get('plan');
   const banca = searchParams.get('banca');
 
   const { 
@@ -144,9 +83,9 @@ export default function MateriaDetalhes() {
     addStudyRecord, 
     updateStudyRecord, 
     deleteStudyRecord, 
-    availablePlans, 
-    selectedDataFile, 
-    setSelectedDataFile 
+    studyPlans,
+    selectedPlanId, 
+    setSelectedPlanId 
   } = useData();
   const { theme } = useTheme();
 
@@ -165,15 +104,16 @@ export default function MateriaDetalhes() {
   useEffect(() => {
     const fetchPlanAndRecords = async () => {
       setLoading(true);
-      const currentFile = selectedDataFile || initialFileName;
-      if (currentFile) {
-        const data = await getJsonContent(currentFile);
+      const planId = selectedPlanId || initialPlanId;
+      if (planId) {
+        // `getPlan` já entrega o plano normalizado, com cor padrão nas
+        // matérias — o `normalizePlanData` local existia para lidar com os
+        // três formatos de arquivo que a v1 acumulou.
+        const data = await getPlan(planId);
         if (data) {
-          const normalizedData = normalizePlanData(data, currentFile);
-          setPlanData(normalizedData);
+          setPlanData(data);
 
-          // Processa os tópicos após carregar os dados
-          const subject = normalizedData.subjects.find(s => s.subject === subjectName);
+          const subject = data.subjects.find(s => s.subject === subjectName);
           if (subject) {
             setFlattenedTopics(flattenTopicsWithLevel(subject.topics || []));
             setTotalTopicsCount(countTopicsRecursively(subject.topics || []));
@@ -183,7 +123,7 @@ export default function MateriaDetalhes() {
       setLoading(false);
     };
     fetchPlanAndRecords();
-  }, [selectedDataFile, initialFileName, subjectName]);
+  }, [selectedPlanId, initialPlanId, subjectName]);
 
   const filteredStudyRecords = useMemo(() => {
     return studyRecords.filter(record => record.subject === subjectName);
@@ -218,9 +158,6 @@ export default function MateriaDetalhes() {
 
   const totalPagesRead = useMemo(() => {
     return filteredStudyRecords.reduce((acc, record) => {
-        if (record.pagesRead) {
-            return acc + record.pagesRead;
-        }
         if (record.pages) {
             return acc + record.pages.reduce((pageAcc, page) => pageAcc + (page.end - page.start + 1), 0);
         }
@@ -262,7 +199,7 @@ export default function MateriaDetalhes() {
   const chartData = useMemo(() => {
     let data;
     let label;
-    let unit;
+    let unit: 'day' | 'week' | 'month';
 
     if (activeTab === 'daily') {
       data = aggregateDailyData();
@@ -293,7 +230,8 @@ export default function MateriaDetalhes() {
     };
   }, [activeTab, aggregateDailyData, aggregateWeeklyData, aggregateMonthlyData]);
 
-  const chartOptions = useMemo(() => ({
+  // Anotado: sem o tipo, `type: 'time'` alarga para `string` e o chart.js recusa.
+  const chartOptions: ChartOptions<'line'> = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -430,7 +368,7 @@ export default function MateriaDetalhes() {
             </button>
           </td>
         </tr>
-        {isExpanded && hasSubtopics && topic.sub_topics.map((subTopic, index) => (
+        {isExpanded && hasSubtopics && (topic.sub_topics ?? []).map((subTopic, index) => (
           <TopicRow key={index} topic={subTopic} subjectName={subjectName} level={level + 1} onOpenRegisterModal={onOpenRegisterModal} allTopicsExpanded={allTopicsExpanded} />
         ))}
       </React.Fragment>
@@ -473,14 +411,14 @@ export default function MateriaDetalhes() {
                 </span>
               </button>
               <select
-                value={selectedDataFile || ''}
-                onChange={(e) => setSelectedDataFile(e.target.value)}
+                value={selectedPlanId || ''}
+                onChange={(e) => setSelectedPlanId(e.target.value)}
                 className="bg-white dark:bg-gray-700 border border-amber-500 dark:border-amber-400 rounded-full py-2 px-4 text-amber-700 dark:text-amber-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors shadow-md text-base font-medium appearance-none pr-8"
                 style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox%3D%220 0 20 20%22 fill%3D%22%23A3BFFA%22%3E%3Cpath fill-rule%3D%22evenodd%22 d%3D%22M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z%22 clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.5em' }}
               >
-                {availablePlans.map((plan) => (
-                  <option key={plan} value={plan}>
-                    {plan.replace('.json', '').toUpperCase()}
+                {studyPlans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name.toUpperCase()}
                   </option>
                 ))}
               </select>
@@ -550,7 +488,7 @@ export default function MateriaDetalhes() {
                       <td className="py-2 px-4 border-b border-gray-200 dark:border-gray-600 whitespace-nowrap text-gray-800 dark:text-gray-200">{formatTime(record.studyTime)}</td>
                       <td className="py-2 px-4 border-b border-gray-200 dark:border-gray-600 text-green-600 dark:text-green-400 font-semibold">{record.questions?.correct || 0}</td>
                       <td className="py-2 px-4 border-b border-gray-200 dark:border-gray-600 text-red-600 dark:text-red-400 font-semibold">{(record.questions?.total || 0) - (record.questions?.correct || 0)}</td>
-                      <td className="py-2 px-4 border-b border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200">{record.pagesRead || '-'}</td>
+                      <td className="py-2 px-4 border-b border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200">{record.pages?.length ? countPagesRead(record.pages) : '-'}</td>
                       <td className="py-2 px-4 border-b border-gray-200 dark:border-gray-600">
                         <button onClick={() => handleEditRecord(record)} className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 mr-2">Editar</button>
                         <button onClick={() => handleDeleteRecord(record.id)} className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300">Excluir</button>

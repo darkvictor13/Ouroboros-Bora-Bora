@@ -10,6 +10,7 @@ import PlanSelector from '../../components/PlanSelector';
 import StopwatchModal from '../../components/StopwatchModal';
 import { Line, Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale, BarElement, RadialLinearScale, TooltipItem } from 'chart.js';
+import type { ChartOptions } from 'chart.js';
 import 'chartjs-adapter-date-fns';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 
@@ -20,7 +21,9 @@ import CategoryHoursChart from '../../components/CategoryHoursChart';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale, BarElement, RadialLinearScale);
 
 export default function Estatisticas() {
-  const { selectedDataFile, setSelectedDataFile, availablePlans, stats, addStudyRecord, updateStudyRecord, applyFilters, availableSubjects, availableEditalData, availableCategories } = useData();
+  // `availableEditalData` nunca existiu no contexto — a tela lia `undefined` e
+  // já passava `stats.editalData` para o modal de filtro.
+  const { selectedPlanId, setSelectedPlanId, availablePlanIds, stats, addStudyRecord, updateStudyRecord, applyFilters, availableSubjects, availableCategories } = useData();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = React.useState(false);
   const [chartJsLoaded, setChartJsLoaded] = React.useState(false);
@@ -85,7 +88,8 @@ export default function Estatisticas() {
     ],
   };
 
-  const lineOptions = {
+  // Anotado: sem o tipo, `type: 'time'` alarga para `string` e o chart.js recusa.
+  const lineOptions: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -173,7 +177,7 @@ export default function Estatisticas() {
     if (record.id) {
       updateStudyRecord(record); // Se tem ID, atualiza
     } else {
-      addStudyRecord({ ...record, id: Date.now().toString() }); // Se não tem ID, adiciona com um novo ID
+      addStudyRecord(record); // Quem gera o ID é o contexto
     }
     setIsModalOpen(false);
     setEditingRecord(null);
@@ -227,7 +231,7 @@ export default function Estatisticas() {
             </span>
           </td>
         </tr>
-        {hasChildren && isExpanded && node.children.map((child, index) => (
+        {hasChildren && isExpanded && (node.children ?? []).map((child, index) => (
           <HierarchicalPerformanceRow
             key={child.id || index}
             node={child}
@@ -435,7 +439,7 @@ export default function Estatisticas() {
                       x: {
                         title: { display: false },
                         min: 0,
-                        ticks: { stepSize: 4, callback: (value: number) => `${value}h`, color: '#4B5563' },
+                        ticks: { stepSize: 4, callback: (value: string | number) => `${value}h`, color: '#4B5563' },
                         grid: { color: '#D1D5DB' }
                       },
                       y: {
@@ -512,7 +516,7 @@ export default function Estatisticas() {
                         title: { display: false },
                         min: 0,
                         max: 100,
-                        ticks: { stepSize: 20, callback: (value: number) => `${value}%`, color: '#4B5563' },
+                        ticks: { stepSize: 20, callback: (value: string | number) => `${value}%`, color: '#4B5563' },
                         grid: { color: '#D1D5DB' }
                       }
                     },
@@ -599,7 +603,6 @@ export default function Estatisticas() {
         applyFilters(filters);
         setIsFilterModalOpen(false);
       }}
-      sessions={stats.allRecords || []}
       availableSubjects={availableSubjects}
       availableEditalData={stats.editalData}
       availableCategories={availableCategories}
@@ -608,7 +611,7 @@ export default function Estatisticas() {
       isOpen={showStopwatchModal}
       onClose={closeStopwatchModal}
       onSaveAndClose={(time, subject, topic) => {
-        const subjectId = availableSubjects.find(s => s.subject === subject)?.id || '';
+        const subjectId = stats.editalData.find(s => s.subject === subject)?.id || '';
         const newRecord: StudyRecord = {
           id: '',
           date: getLocalYYYYMMDD(),

@@ -3,14 +3,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { FaTimes, FaCalendarAlt, FaCheckCircle, FaTimesCircle, FaMinusCircle, FaPercentage, FaStar, FaTrash, FaPencilAlt } from 'react-icons/fa';
 import { useData } from '../context/DataContext';
+import type { SimuladoRecord, SimuladoSubject } from '@/lib/data';
 
-interface Subject {
-  name: string;
-  weight: number;
-  totalQuestions: number;
-  correct: number;
-  incorrect: number;
-}
+// A linha de matéria de um simulado é exatamente o `SimuladoSubject` da camada
+// de dados — a cópia local aqui estava sem `color`, que o formulário grava.
+type Subject = SimuladoSubject;
 
 interface AddSimuladoModalProps {
   isOpen: boolean;

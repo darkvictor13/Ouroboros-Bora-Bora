@@ -2,14 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
-import { getJsonContent } from '../app/actions';
+import { getPlan } from '@/lib/data';
+import type { EditalSubject } from '@/lib/data';
 import { useNotification } from '../context/NotificationContext';
 
-interface Subject {
-  subject: string;
-  topics: any[];
-  color: string;
-}
+type Subject = EditalSubject;
 
 interface AddSessionModalProps {
   isOpen: boolean;
@@ -17,7 +14,7 @@ interface AddSessionModalProps {
 }
 
 const AddSessionModal: React.FC<AddSessionModalProps> = ({ isOpen, onClose }) => {
-  const { studyCycle, setStudyCycle, selectedDataFile } = useData();
+  const { studyCycle, setStudyCycle, selectedPlanId } = useData();
   const { showNotification } = useNotification();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
@@ -25,25 +22,17 @@ const AddSessionModal: React.FC<AddSessionModalProps> = ({ isOpen, onClose }) =>
 
   useEffect(() => {
     async function loadSubjects() {
-      if (selectedDataFile) {
-        const data: Subject[] | { subjects: Subject[] } = await getJsonContent(selectedDataFile);
-        let subjectsArray: Subject[] = [];
-        if (Array.isArray(data)) {
-          subjectsArray = data;
-        } else if (data && typeof data === 'object' && Array.isArray(data.subjects)) {
-          subjectsArray = data.subjects;
-        }
-        const subjectsWithColors = subjectsArray.map((s: Subject) => ({
-          ...s,
-          color: s.color || '#94A3B8'
-        }));
-        setSubjects(subjectsWithColors);
+      if (selectedPlanId) {
+        // `getPlan` já devolve as matérias com cor padrão; o ramo que tratava o
+        // plano como array puro era resquício dos arquivos da v1.
+        const plan = await getPlan(selectedPlanId);
+        setSubjects(plan?.subjects ?? []);
       }
     }
-    if (selectedDataFile) {
+    if (selectedPlanId) {
       loadSubjects();
     }
-  }, [selectedDataFile]);
+  }, [selectedPlanId]);
 
   const handleAddSession = () => {
     if (!selectedSubject) {
@@ -58,6 +47,9 @@ const AddSessionModal: React.FC<AddSessionModalProps> = ({ isOpen, onClose }) =>
     const subjectData = subjects.find(s => s.subject === selectedSubject);
     const newSession = {
       id: `${Date.now()}`,
+      // Sem `subjectId` a sessão não casa com nenhum registro de estudo, e o
+      // rename de matéria passa por ela sem atualizar nada.
+      subjectId: subjectData?.id ?? '',
       subject: selectedSubject,
       duration,
       color: subjectData?.color || '#94A3B8',

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useData, StudyRecord, StudySession } from '../../context/DataContext';
-import { getJsonContent } from '../actions';
+import { getPlan } from '@/lib/data';
+import type { EditalSubject, EditalTopic } from '@/lib/data';
 import Link from 'next/link';
 import { useNotification } from '../../context/NotificationContext';
 import { FaPlay, FaPlus, FaHandSparkles } from 'react-icons/fa';
@@ -16,15 +17,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { arrayMove } from '@dnd-kit/sortable';
 
 // Interfaces
-interface Subject {
-  subject: string;
-  topics: Topic[];
-  color: string;
-}
-
-interface Topic {
-  topic_text: string;
-}
+type Subject = EditalSubject;
+type Topic = EditalTopic;
 
 interface SubjectSettings {
   [key: string]: { importance: number; knowledge: number };
@@ -264,7 +258,7 @@ const SortableItem = ({
 
 export default function Planejamento() {
   const {
-    selectedDataFile, addStudyRecord, updateStudyRecord, resetStudyCycle,
+    selectedPlanId, addStudyRecord, updateStudyRecord, resetStudyCycle,
     studyCycle, setStudyCycle, completedCycles, currentProgressMinutes, sessionProgressMap, generateStudyCycle,
     setCurrentStudySession, initialStudyRecord, setInitialStudyRecord, stopwatchTargetDuration,
     setStopwatchTargetDuration, stopwatchModalSubject, setStopwatchModalSubject,
@@ -301,19 +295,10 @@ export default function Planejamento() {
 
   useEffect(() => {
     async function loadSubjects() {
-      if (selectedDataFile) {
-        const data: Subject[] | { subjects: Subject[] } = await getJsonContent(selectedDataFile);
-        let subjectsArray: Subject[] = [];
-        if (Array.isArray(data)) {
-          subjectsArray = data;
-        } else if (data && typeof data === 'object' && Array.isArray(data.subjects)) {
-          subjectsArray = data.subjects;
-        }
-        const subjectsWithColors = subjectsArray.map((s: Subject) => ({
-          ...s,
-          color: s.color || '#94A3B8'
-        }));
-        setSubjects(subjectsWithColors);
+      if (selectedPlanId) {
+        // `getPlan` já devolve as matérias com cor padrão.
+        const plan = await getPlan(selectedPlanId);
+        setSubjects(plan?.subjects ?? []);
       } else {
         setSubjects([]); // Limpa as matérias se nenhum plano for selecionado
       }
@@ -324,7 +309,7 @@ export default function Planejamento() {
     setSelectedSubjects([]);
     setSubjectSettings({});
     
-  }, [selectedDataFile]);
+  }, [selectedPlanId]);
 
   useEffect(() => {
     if (isModalOpen && selectedSubjects.length > 0) {
@@ -739,7 +724,6 @@ export default function Planejamento() {
                     topic: topic || '',
                     studyTime: time,
                     questions: { correct: 0, total: 0 },
-                    material: '',
                     category: 'teoria',
                     notes: 'Estudo cronometrado.',
                     reviewPeriods: ['1d', '7d', '30d'],

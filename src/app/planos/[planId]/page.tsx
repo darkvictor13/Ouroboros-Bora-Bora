@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { getJsonContent, updatePlanFile, getStudyRecords, StudyRecord, deletePlanFile, uploadImage } from '../../actions';
+import { getPlan, updatePlan, getStudyRecords, deletePlan as deletePlanOnServer, uploadPlanIcon } from '@/lib/data';
+import type { StudyRecord } from '@/lib/data';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import AddSubjectModal from '../../../components/AddSubjectModal';
@@ -11,32 +12,8 @@ import { FaPlusCircle, FaEdit, FaTrash, FaCamera, FaEye } from 'react-icons/fa';
 import { useNotification } from '../../../context/NotificationContext';
 import ConfirmationModal from '../../../components/ConfirmationModal';
 
-// Interfaces
-interface PlanData {
-  name: string;
-  observations: string;
-  cargo?: string;
-  edital?: string;
-  iconUrl?: string;
-  subjects: Subject[];
-  bancaTopicWeights?: {
-    [subjectName: string]: {
-      [topicText: string]: number; // Weight from 1 to 5
-    };
-  };
-}
-
-interface Subject {
-  subject: string;
-  topics: Topic[];
-  color: string; // Adicionando a propriedade color
-}
-
-interface Topic {
-  topic_number?: string;
-  topic_text: string;
-  sub_topics?: Topic[];
-}
+import type { EditalSubject as Subject, EditalTopic as Topic } from '@/lib/data';
+import type { PlanData } from '@/lib/data';
 
 // Função auxiliar para formatar o tempo
 const formatTime = (milliseconds: number) => {
@@ -73,64 +50,9 @@ const countStudiedTopicsRecursively = (topics: Topic[], studiedTopicTexts: Set<s
   return count;
 };
 
-// Função para normalizar os dados do plano
-const normalizePlanData = (data: PlanData | Subject[] | null, fileName: string): PlanData => {
-  const defaultColor = '#94A3B8';
-
-  // Case 1: data is an array of subjects (e.g., sefaz-df.json)
-  if (Array.isArray(data)) {
-    const subjectsWithColors = data.map(subject => ({
-      ...subject,
-      color: subject.color || defaultColor,
-    }));
-    // Apply uniqueness here
-    const uniqueSubjectsMap = new Map<string, Subject>();
-    subjectsWithColors.forEach(s => uniqueSubjectsMap.set(s.subject, s));
-    return {
-      name: fileName.replace('.json', '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-      observations: '',
-      cargo: '',
-      edital: '',
-      iconUrl: undefined,
-      subjects: Array.from(uniqueSubjectsMap.values()), // Return unique subjects
-    };
-  }
-
-  // Case 2: data is an object that might contain subjects (e.g., meu-plano.json or newly created plans)
-  if (data && typeof data === 'object' && !Array.isArray(data)) {
-    const subjects = Array.isArray(data.subjects) ? data.subjects : []; // Ensure subjects is an array
-    const subjectsWithColors = subjects.map((subject: Subject) => ({
-      ...subject,
-      color: subject.color || defaultColor,
-    }));
-    // Apply uniqueness here
-    const uniqueSubjectsMap = new Map<string, Subject>();
-    subjectsWithColors.forEach(s => uniqueSubjectsMap.set(s.subject, s));
-    return {
-      ...data,
-      name: data.name || fileName.replace('.json', '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-      observations: data.observations || '',
-      cargo: (data as any).cargo || '',
-      edital: (data as any).edital || '',
-      subjects: Array.from(uniqueSubjectsMap.values()), // Return unique subjects
-    };
-  }
-
-  // Case 3: data is null, undefined, or any other unexpected type
-  // Return a default empty PlanData structure
-  return {
-    name: fileName.replace('.json', '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-    observations: '',
-    cargo: '',
-    edital: '',
-    iconUrl: undefined,
-    subjects: [],
-  };
-};
-
 export default function PlanoDetalhes() {
   const params = useParams();
-  const fileName = params.fileName as string;
+  const planId = params.planId as string;
   const router = useRouter();
   const { showNotification } = useNotification();
   
@@ -167,9 +89,11 @@ export default function PlanoDetalhes() {
     );
 
     const totalStudyTime = filteredRecords.reduce((acc, record) => acc + (record.studyTime || 0), 0);
-    const totalCorrectQuestions = filteredRecords.reduce((acc, record) => acc + (record.correctQuestions || 0), 0);
-    const totalIncorrectQuestions = filteredRecords.reduce((acc, record) => acc + (record.incorrectQuestions || 0), 0);
-    const totalQuestions = totalCorrectQuestions + totalIncorrectQuestions;
+    // A v1 somava `record.correctQuestions`/`incorrectQuestions`, campos que
+    // nunca existiram em StudyRecord — os contadores desta tela mostravam
+    // sempre zero. O dado real está em `record.questions`.
+    const totalCorrectQuestions = filteredRecords.reduce((acc, record) => acc + (record.questions?.correct || 0), 0);
+    const totalQuestions = filteredRecords.reduce((acc, record) => acc + (record.questions?.total || 0), 0);
     const overallPerformance = totalQuestions > 0 ? Math.round((totalCorrectQuestions / totalQuestions) * 100) : 0;
 
     return { totalStudyTime, totalQuestions, overallPerformance };
@@ -193,7 +117,7 @@ export default function PlanoDetalhes() {
 
       // Questões resolvidas
       records.filter(record => record.subject === subject.subject).forEach(record => {
-        totalQuestions += (record.correctQuestions || 0) + (record.incorrectQuestions || 0);
+        totalQuestions += record.questions?.total || 0;
       });
 
       stats[subject.subject] = {
@@ -211,18 +135,21 @@ export default function PlanoDetalhes() {
 
   const fetchPlanData = useCallback(async () => {
     setLoading(true);
-    if (fileName) {
-      const data = await getJsonContent(fileName);
-      const records = await getStudyRecords(fileName); // Carrega os registros de estudo
+    if (planId) {
+      // `getPlan` já entrega o plano normalizado — o `normalizePlanData` local
+      // existia para lidar com os três formatos de arquivo da v1.
+      const [data, records] = await Promise.all([
+        getPlan(planId),
+        getStudyRecords(planId),
+      ]);
       if (data) {
-        const normalizedData = normalizePlanData(data, fileName);
-        setPlanData(normalizedData);
-        setStudyRecords(records); // Define os registros de estudo
+        setPlanData(data);
+        setStudyRecords(records);
       }
     }
     setLoading(false);
-      setHasChanges(false);
-  }, [fileName]);
+    setHasChanges(false);
+  }, [planId]);
 
   useEffect(() => {
     fetchPlanData();
@@ -245,8 +172,11 @@ export default function PlanoDetalhes() {
     } else {
       // Modo de adição
       const newSubject: Subject = {
+        // O ID é obrigatório: é ele que liga registros, revisões e sessões do
+        // ciclo à matéria, e é o que sobrevive a um rename.
+        id: crypto.randomUUID(),
         subject: subjectName,
-        topics: topics, // Usa a estrutura de tópicos diretamente
+        topics: topics,
         color: color,
       };
       updatedSubjects = [...planData.subjects, newSubject];
@@ -272,7 +202,7 @@ export default function PlanoDetalhes() {
     setIsSubjectModalOpen(false);
     setSubjectToEdit(null); // Limpa o estado de edição
 
-    const result = await updatePlanFile(fileName, updatedPlanData);
+    const result = await updatePlan(planId, updatedPlanData);
     if (result.success) {
       showNotification(successMessage, 'success');
     } else {
@@ -297,20 +227,14 @@ export default function PlanoDetalhes() {
   const handleSaveEditedPlan = async (updatedFields: { name: string; observations: string; cargo: string; edital: string; imageFile?: File; existingIconUrl?: string }) => {
     if (!planData) return;
 
-    let finalIconUrl = updatedFields.existingIconUrl; // Assume existing URL by default
-
-    // If a new image file is provided, upload it using FormData
+    // O ícone tem caminho próprio: `uploadPlanIcon` sobe o arquivo para o
+    // Storage e já grava `plans.icon_path`. Por isso ele não entra no update
+    // dos outros campos, que nem enxerga a coluna.
     if (updatedFields.imageFile) {
-      const formData = new FormData();
-      formData.append('imageFile', updatedFields.imageFile);
-      formData.append('baseName', updatedFields.name); // Pass the plan name as baseName
-
-      const uploadResult = await uploadImage(formData);
-      if (uploadResult.success && uploadResult.iconUrl) {
-        finalIconUrl = uploadResult.iconUrl;
-      } else {
+      const uploadResult = await uploadPlanIcon(planId, updatedFields.imageFile);
+      if (!uploadResult.success) {
         showNotification(`Erro ao fazer upload da nova imagem: ${uploadResult.error}`, 'error');
-        return; // Stop if image upload fails
+        return;
       }
     }
 
@@ -320,10 +244,9 @@ export default function PlanoDetalhes() {
       observations: updatedFields.observations,
       cargo: updatedFields.cargo,
       edital: updatedFields.edital,
-      iconUrl: finalIconUrl, // Use the new URL or the existing one
     };
 
-    const result = await updatePlanFile(fileName, updatedPlanContent);
+    const result = await updatePlan(planId, updatedPlanContent);
     if (result.success) {
       showNotification('Plano atualizado com sucesso!', 'success');
       setIsEditPlanModalOpen(false);
@@ -351,7 +274,7 @@ export default function PlanoDetalhes() {
       setPlanData(updatedPlanData);
       setHasChanges(true);
 
-      const result = await updatePlanFile(fileName, updatedPlanData);
+      const result = await updatePlan(planId, updatedPlanData);
       if (result.success) {
         showNotification('Disciplina excluída com sucesso!', 'success');
         // Opcional: Recarregar dados para garantir consistência, embora o setPlanData já atualize o estado
@@ -369,7 +292,7 @@ export default function PlanoDetalhes() {
 
   const handleConfirmDelete = async () => {
     if (planToDelete) {
-      const result = await deletePlanFile(fileName);
+      const result = await deletePlanOnServer(planId);
       if (result.success) {
         showNotification('Plano excluído com sucesso!', 'success');
         router.push('/planos'); // Redireciona para a página de planos
@@ -532,7 +455,7 @@ export default function PlanoDetalhes() {
                     style={{ backgroundColor: `${subject.color}E6` }} // Usar a cor da disciplina com 90% de opacidade
                   >
                     <button
-                      onClick={() => router.push(`/materias/${encodeURIComponent(subject.subject)}?plan=${fileName}${planData.banca ? `&banca=${encodeURIComponent(planData.banca)}` : ''}`)}
+                      onClick={() => router.push(`/materias/${encodeURIComponent(subject.subject)}?plan=${planId}${planData.banca ? `&banca=${encodeURIComponent(planData.banca)}` : ''}`)}
                       className="bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 p-3 rounded-full hover:bg-gray-200 transition-colors shadow-md"
                       title="Visualizar"
                     >
@@ -565,14 +488,14 @@ export default function PlanoDetalhes() {
         isOpen={isSubjectModalOpen}
         onClose={() => { setIsSubjectModalOpen(false); setSubjectToEdit(null); }} // Limpa o estado de edição ao fechar
         onSave={handleSaveSubject}
-        initialSubjectData={subjectToEdit} // Passa os dados da matéria para edição
+        initialSubjectData={subjectToEdit ?? undefined} // Passa os dados da matéria para edição
         key="subject-modal"
       />
       <CreatePlanModal
         isOpen={isEditPlanModalOpen}
         onClose={() => setIsEditPlanModalOpen(false)}
         onSave={handleSaveEditedPlan}
-        initialPlanData={planToEdit}
+        initialPlanData={planToEdit ?? undefined}
         isEditing={true}
       />
 

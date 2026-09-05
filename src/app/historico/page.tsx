@@ -47,9 +47,9 @@ const HistoricoPage = () => {
     addStudyRecord,
     updateStudyRecord,
     deleteStudyRecord,
-    availablePlans,
-    selectedDataFile,
-    setSelectedDataFile,
+    availablePlanIds,
+    selectedPlanId,
+    setSelectedPlanId,
     studyPlans, // Adicionado para acessar as cores
     stats,
   } = useData();
@@ -276,11 +276,9 @@ const HistoricoPage = () => {
       <FilterModal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
-        onApplyFilters={handleApplyFilters}
+        onApply={handleApplyFilters}
         availableSubjects={availableSubjects}
         availableCategories={Object.values(categoryDisplayMap)}
-        initialFilters={filters}
-        sessions={allStudyRecords}
         availableEditalData={stats.editalData}
       />
       <ConfirmationModal

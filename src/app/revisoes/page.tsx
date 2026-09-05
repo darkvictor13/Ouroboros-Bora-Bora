@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData, StudyRecord, ReviewRecord } from '../../context/DataContext';
-import { BsPlusCircleFill, BsPlayFill, BsCheckCircleFill, BsXCircleFill, BsClockFill, BsBookFill, BsCameraVideoFill, BsFileEarmarkTextFill, BsChatTextFill } from 'react-icons/bs';
+import { BsPlusCircleFill, BsPlayFill, BsCheckCircleFill, BsXCircleFill, BsClockFill, BsBookFill, BsCameraVideoFill, BsChatTextFill } from 'react-icons/bs';
 import PlanSelector from '../../components/PlanSelector';
 import StudyRegisterModal from '../../components/StudyRegisterModal';
 
@@ -37,7 +37,7 @@ const formatTime = (ms: number): string => {
 };
 
 export default function Revisao() {
-  const { selectedDataFile, setSelectedDataFile, availablePlans, addStudyRecord, updateStudyRecord, studyRecords, reviewRecords, updateReviewRecord } = useData();
+  const { selectedPlanId, setSelectedPlanId, availablePlanIds, addStudyRecord, updateStudyRecord, studyRecords, reviewRecords, updateReviewRecord } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<StudyRecord | null>(null);
   const [activeTab, setActiveTab] = useState<'scheduled' | 'overdue' | 'ignored' | 'completed'>('scheduled');
@@ -72,13 +72,13 @@ export default function Revisao() {
 
   // This function will now open the modal to register the review as a study session
   const handleTriggerReviewAction = (reviewRecord: ReviewRecord) => {
-    const originalStudyRecord = studyRecords.find(sr => sr.id === reviewRecord.studyRecordId);
-
+    // A v1 copiava `originalStudyRecord.material` para cá, mas nenhum registro
+    // jamais teve esse campo: o input "Material" do StudyRegisterModal não é
+    // gravado. O valor era sempre ''.
     const prefilledStudyRecord: Partial<StudyRecord> = {
       subject: reviewRecord.subject,
       topic: reviewRecord.topic,
       category: 'revisao',
-      material: originalStudyRecord?.material || '',
     };
     setEditingRecord(prefilledStudyRecord as StudyRecord);
     setCompletingReviewId(reviewRecord.id);
@@ -314,7 +314,7 @@ export default function Revisao() {
                                     <BsClockFill className="mr-1" /> {formatTime(studyRecord.studyTime)}
                                   </span>
                                 )}
-                                {studyRecord && (studyRecord.questions?.correct > 0 || studyRecord.questions?.total > 0) && (
+                                {studyRecord && ((studyRecord.questions?.correct ?? 0) > 0 || (studyRecord.questions?.total ?? 0) > 0) && (
                                   <>
                                     <span className="flex items-center text-green-600">
                                       <BsCheckCircleFill className="mr-1" /> {studyRecord.questions?.correct || 0}
@@ -331,11 +331,6 @@ export default function Revisao() {
 
                               {/* Grupo 3: Materiais e Ação */}
                               <div className="flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-300">
-                                {studyRecord && studyRecord.material && (
-                                  <span className="flex items-center">
-                                    <BsFileEarmarkTextFill className="mr-1" /> {studyRecord.material}
-                                  </span>
-                                )}
                                 {studyRecord && studyRecord.pages && studyRecord.pages.length > 0 && (
                                   <span className="flex items-center">
                                     <BsBookFill className="mr-1" /> {studyRecord.pages.map(p => `${p.start}-${p.end}`).join(', ')}
@@ -363,7 +358,7 @@ export default function Revisao() {
                                 })()}
                               </div>
                               <div className="relative">
-                                {studyRecord && studyRecord.comments && (
+                                {studyRecord && studyRecord.notes && (
                                   <button
                                     onClick={() => setActiveCommentId(activeCommentId === record.id ? null : record.id)}
                                     title="Comentários"
@@ -374,7 +369,7 @@ export default function Revisao() {
                                 )}
                                 {activeCommentId === record.id && (
                                   <div className="absolute bottom-full right-0 mb-2 w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-10 p-4">
-                                    <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{studyRecord?.comments}</p>
+                                    <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{studyRecord?.notes}</p>
                                     <div className="absolute bottom-0 right-4 w-4 h-4 bg-white dark:bg-gray-700 border-b border-r border-gray-300 dark:border-gray-600 rotate-45"></div>
                                   </div>
                                 )}

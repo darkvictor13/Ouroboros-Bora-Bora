@@ -84,7 +84,7 @@ const TopicRow: React.FC<TopicRowProps> = ({
         <td className="p-2 text-center font-bold text-red-600">{reviewed}</td>
         <td className="p-2 text-center text-gray-900 dark:text-gray-100">{totalQuestions}</td>
         <td className={`p-2 text-center font-bold ${getPerformanceTextColor(percentageCorrect)}`}>{percentageCorrect}</td>
-        <td className="p-2 text-center text-gray-900 dark:text-gray-300">{formatDate(topic.last_study)}</td>
+        <td className="p-2 text-center text-gray-900 dark:text-gray-300">{formatDate(topic.last_study ?? '-')}</td>
         <td className="p-2 text-center">
           <div className="flex items-center justify-center space-x-2">
             <button 

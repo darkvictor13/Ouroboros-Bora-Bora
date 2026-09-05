@@ -5,7 +5,6 @@ import React, { useState, useMemo } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import '../app/datepicker-custom.css';
-import { StudySession } from '@/types/types';
 import { FaBook, FaBullseye, FaChartLine, FaHistory, FaTimes, FaFileAlt, FaGavel, FaQuestionCircle, FaTag } from 'react-icons/fa';
 import MultiSelectDropdown from './MultiSelectDropdown';
 
@@ -22,13 +21,12 @@ interface FilterModalProps {
   isOpen: boolean;
   onClose: () => void;
   onApply: (filters: any) => void;
-  sessions: StudySession[];
   availableCategories: string[];
   availableSubjects: string[];
   availableEditalData: EditalSubject[];
 }
 
-const categoryIcons: { [key: string]: JSX.Element } = {
+const categoryIcons: { [key: string]: React.JSX.Element } = {
   Teoria: <FaBook className="mr-2" />,
   Revisão: <FaHistory className="mr-2" />,
   Exercícios: <FaBullseye className="mr-2" />,
@@ -52,7 +50,6 @@ const FilterModal: React.FC<FilterModalProps> = ({
   isOpen,
   onClose,
   onApply,
-  sessions,
   availableCategories,
   availableSubjects,
   availableEditalData,
@@ -138,7 +135,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <DatePicker
                   selected={startDate}
-                  onChange={(date: Date) => setStartDate(date)}
+                  onChange={(date) => setStartDate(date)}
                   selectsStart
                   startDate={startDate}
                   endDate={endDate}
@@ -150,11 +147,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
                 />
                 <DatePicker
                   selected={endDate}
-                  onChange={(date: Date) => setEndDate(date)}
+                  onChange={(date) => setEndDate(date)}
                   selectsEnd
                   startDate={startDate}
                   endDate={endDate}
-                  minDate={startDate}
+                  minDate={startDate ?? undefined}
                   placeholderText="Data de Fim"
                   className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   dateFormat="dd/MM/yyyy"
