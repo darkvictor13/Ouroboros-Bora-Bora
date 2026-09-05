@@ -1,13 +1,13 @@
 'use client';
 
-import { SessionProvider } from 'next-auth/react';
 import React from 'react';
+import { AuthProvider } from '@/context/AuthContext';
 import { DonationModalProvider } from '@/context/DonationModalContext';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider>
+    <AuthProvider>
       <DonationModalProvider>{children}</DonationModalProvider>
-    </SessionProvider>
+    </AuthProvider>
   );
 }

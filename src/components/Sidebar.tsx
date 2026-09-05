@@ -4,12 +4,12 @@ import React from 'react';
 import { useSidebar } from '../context/SidebarContext';
 import { FaHome, FaClipboardList, FaBook, FaFileAlt, FaDatabase, FaRedoAlt, FaHistory, FaChartBar, FaCalendarAlt, FaGraduationCap, FaHeart } from 'react-icons/fa';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { BsList } from 'react-icons/bs';
 import ThemeToggleButton from './ThemeToggleButton';
 import PlanSelector from './PlanSelector';
 import { useTheme } from '../context/ThemeContext';
-import { useSession, signOut } from 'next-auth/react';
+import { useAuth } from '../context/AuthContext';
 import { FaSignOutAlt } from 'react-icons/fa';
 import { useDonationModal } from '../context/DonationModalContext';
 
@@ -17,10 +17,16 @@ const Sidebar = () => {
   const { isSidebarExpanded, toggleSidebar } = useSidebar();
   const pathname = usePathname();
   const { theme } = useTheme();
-  const { data: session, status } = useSession();
+  const { status, username, signOut } = useAuth();
+  const router = useRouter();
   const { openModal } = useDonationModal();
 
   const logoSrc = theme === 'dark' ? '/logo-modo-escuro.svg' : '/logo.svg';
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/login');
+  };
 
   return (
     <div
@@ -78,13 +84,13 @@ const Sidebar = () => {
             <li className="mb-2">
               <Link href="/backup" className={`flex items-center p-2 rounded-md hover:bg-amber-600 transition-colors duration-200 ${pathname === '/backup' ? 'bg-amber-600 dark:bg-gray-700' : ''} dark:hover:bg-gray-700 dark:focus:ring-gray-500 dark:text-gray-100`}><FaDatabase className="mr-2" />Backup</Link>
             </li>
-            {session && (
+            {status === 'authenticated' && (
               <li className="mb-2">
                 <button
-                  onClick={() => signOut({ callbackUrl: '/login' })}
+                  onClick={handleSignOut}
                   className="flex items-center p-2 rounded-md hover:bg-amber-600 transition-colors duration-200 w-full text-left dark:hover:bg-gray-700 dark:focus:ring-gray-500 dark:text-gray-100"
                 >
-                  <FaSignOutAlt className="mr-2" />Sair ({session.user?.name})
+                  <FaSignOutAlt className="mr-2" />Sair ({username ?? 'conta'})
                 </button>
               </li>
             )}

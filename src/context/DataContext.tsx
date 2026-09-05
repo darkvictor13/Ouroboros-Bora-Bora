@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from 'react';
-import { useSession } from 'next-auth/react';
+import { useAuth } from './AuthContext';
 import { 
   getJsonFiles, 
   getStudyRecords, 
@@ -793,7 +793,7 @@ const calculateTopicScores = (
 };
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
-  const { data: session, status: authStatus } = useSession();
+  const { status: authStatus } = useAuth();
   const [selectedDataFile, _setSelectedDataFile] = useState<string>('');
   const [availablePlans, setAvailablePlans] = useState<string[]>([]);
   const [studyPlans, setStudyPlans] = useState<any[]>([]);

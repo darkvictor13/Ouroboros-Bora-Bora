@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../auth/[...nextauth]/route';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch'; // Importa node-fetch no topo
@@ -51,12 +50,12 @@ function slugify(text: string): string {
 
 // Lógica de getUserDataDirectory duplicada aqui para garantir que funcione no build de produção
 async function getImportUserDataDirectory(): Promise<string> {
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user || !session.user.id) {
+  const user = await getAuthenticatedUser();
+  if (!user) {
     throw new Error('Usuário não autenticado na função de diretório de dados.');
   }
   const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
-  const userDir = path.join(dataDir, session.user.id);
+  const userDir = path.join(dataDir, user.id);
   await fs.mkdir(userDir, { recursive: true });
   return userDir;
 }
@@ -81,9 +80,9 @@ async function urlToBase64(url: string): Promise<string | undefined> {
 
 // Função principal da API
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
+  const user = await getAuthenticatedUser();
 
-  if (!session || !session.user || !session.user.id) {
+  if (!user) {
     return NextResponse.json({ error: 'Não autorizado. Faça login para importar um guia.' }, { status: 401 });
   }
 

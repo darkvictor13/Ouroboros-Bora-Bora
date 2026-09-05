@@ -2,8 +2,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { getServerSession } from 'next-auth';
-import { authOptions } from './api/auth/[...nextauth]/route';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { EditalTopic, EditalSubject as Subject } from '@/context/DataContext';
 import crypto from 'crypto';
 
@@ -86,13 +85,16 @@ export interface StudyCycleData {
   studyDays: string[];
 }
 
+// Fase 2: a identidade agora vem do Supabase Auth, mas os dados continuam em
+// disco. A Fase 3 troca o corpo destas actions por consultas ao Postgres e esta
+// função deixa de existir.
 async function getUserDataDirectory(): Promise<string> {
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user || !session.user.id) {
+  const user = await getAuthenticatedUser();
+  if (!user) {
     throw new Error('Usuário não autenticado.');
   }
   const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
-  const userDir = path.join(dataDir, session.user.id);
+  const userDir = path.join(dataDir, user.id);
   await fs.mkdir(userDir, { recursive: true });
   return userDir;
 }

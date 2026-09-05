@@ -1,31 +1,40 @@
 'use client';
 
 import React, { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSubmitting(true);
 
-    const result = await signIn('credentials', {
-      redirect: false,
-      username,
+    const supabase = createClient();
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
       password,
     });
 
-    if (result?.error) {
-      setError('Credenciais inválidas. Verifique seu nome de usuário e senha.');
-    } else {
-      router.push('/dashboard'); // Redirect to dashboard on successful login
+    setSubmitting(false);
+
+    if (authError) {
+      setError(
+        authError.message === 'Email not confirmed'
+          ? 'Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.'
+          : 'Credenciais inválidas. Verifique seu e-mail e senha.'
+      );
+      return;
     }
+
+    router.push('/dashboard');
   };
 
   return (
@@ -35,13 +44,14 @@ export default function LoginPage() {
         {error && <p className="text-red-500 text-center mb-4">{error}</p>}
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label htmlFor="username" className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">Nome de Usuário:</label>
+            <label htmlFor="email" className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">E-mail:</label>
             <input
-              type="text"
-              id="username"
+              type="email"
+              id="email"
+              autoComplete="email"
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
@@ -50,6 +60,7 @@ export default function LoginPage() {
             <input
               type="password"
               id="password"
+              autoComplete="current-password"
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -59,9 +70,10 @@ export default function LoginPage() {
           <div className="flex items-center justify-between">
             <button
               type="submit"
-              className="bg-amber-500 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+              disabled={submitting}
+              className="bg-amber-500 hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
             >
-              Entrar
+              {submitting ? 'Entrando...' : 'Entrar'}
             </button>
             <Link href="/register" className="inline-block align-baseline font-bold text-sm text-amber-500 hover:text-amber-800">
               Não tem uma conta? Registre-se

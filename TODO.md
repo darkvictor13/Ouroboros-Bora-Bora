@@ -19,6 +19,8 @@ Levantamento que define esta arquitetura:
 - **15 das 17 páginas já são `'use client'`.** As exceções são `layout.tsx` (só exporta `metadata`) e
   `page.tsx` (um `redirect`).
 - **Zero uso** de `cookies()`, `generateMetadata`, `revalidate` ou `dynamic`.
+  (A Fase 2 introduziu **um** `cookies()`, em `src/lib/supabase/server.ts`, como ponte até a
+  Fase 3 migrar as actions. Ele sai junto com elas.)
 - As rotas dinâmicas `[fileName]` e `[subjectName]` leem o parâmetro via `useParams()` — no cliente.
   O servidor nunca precisa dele.
 - Todo o acesso a dados passa por **um único arquivo**: `src/app/actions.tsx` (866 linhas, ~29 server
@@ -87,15 +89,41 @@ ser a única camada de segurança dos dados**.
 
 ## Fase 2 — Autenticação
 
-- [ ] Instalar `@supabase/supabase-js` e `@supabase/ssr`
-- [ ] Criar `src/lib/supabase/client.ts` (browser)
-- [ ] Reescrever `src/app/login/page.tsx` e `src/app/register/page.tsx` para `signInWithPassword` / `signUp`
-- [ ] **Supabase Auth exige e-mail**, o app usa username. Adicionar campo de e-mail no cadastro e
-      manter `username` em `profiles`, populado por trigger `on_auth_user_created`.
-- [ ] Guard de rota **client-side** no `Providers` (`useEffect` que redireciona sem sessão).
+- [x] Instalar `@supabase/supabase-js` e `@supabase/ssr`
+- [x] Criar `src/lib/supabase/client.ts` (browser). Usa `createBrowserClient`, que guarda a sessão em
+      **cookie** e não em localStorage — ver a ponte temporária abaixo.
+- [x] Reescrever `src/app/login/page.tsx` e `src/app/register/page.tsx` para `signInWithPassword` / `signUp`
+- [x] **Supabase Auth exige e-mail**, o app usa username. Adicionado campo de e-mail no cadastro; o
+      username viaja em `options.data` e o trigger `on_auth_user_created` o copia para `profiles`.
+      O login passa a ser **por e-mail** — `profiles` não é legível pelo `anon`, então não há como
+      traduzir username → e-mail antes de autenticar.
+- [x] Guard de rota **client-side**: `src/context/AuthContext.tsx` (dentro do `Providers`) publica
+      `status` no mesmo vocabulário do NextAuth (`loading`/`authenticated`/`unauthenticated`), e o
+      `ClientLayoutWrapper`, que já redirecionava com base nessas strings, ficou intacto.
       ⚠️ Não usar `middleware.ts`: middleware não roda em export estático. Quem protege os dados de
       verdade é a RLS.
-- [ ] Remover `next-auth`, `bcryptjs`, `src/lib/users.ts` e `src/app/api/auth/**`
+- [x] Remover `next-auth`, `bcryptjs`, `src/lib/users.ts` e `src/app/api/auth/**`
+- [x] **Ponte temporária — `src/lib/supabase/server.ts`, remover na Fase 3.** As ~29 actions de
+      `actions.tsx` e a rota `/api/import-guide` ainda gravam em disco e precisam saber de quem é o
+      diretório. Elas passaram a ler a sessão do Supabase pelo cookie (`getAuthenticatedUser()`, que
+      usa `getUser()` e valida o JWT — `getSession()` confiaria no cookie, que é entrada do cliente).
+      Este é o **único** uso de `cookies()` no projeto, e ele some quando a Fase 5 ligar `output: 'export'`.
+- [x] `.env.local.example` com `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+      (antecipado da Fase 5: sem ele o app não sobe depois desta fase). O `.gitignore` ganhou
+      `!.env.local.example`.
+
+**Verificado em 2026-09-05** contra o Supabase local, com Puppeteer dirigindo o app de verdade:
+guard redireciona `/dashboard` → `/login` sem sessão; cadastro entra direto no `/dashboard`;
+sessão gravada em cookie `sb-*`; sidebar mostra o username lido de `profiles`; `/planos` carrega —
+ou seja, a server action se autenticou pelo cookie; logout volta para `/login`; login por e-mail
+funciona; senha errada mostra "Credenciais inválidas"; nenhum erro de JS no console.
+Pela API: o trigger preenche `profiles`, a `anon key` sozinha recebe `42501` em `profiles`,
+e-mail duplicado devolve `user_already_exists` e username duplicado devolve `23505`
+(`profiles_username_key`) — as duas mensagens estão tratadas no formulário.
+
+**Fica para a Fase 3:** `next.config.js` ainda tem `typescript.ignoreBuildErrors` ligado, então o
+`tsc` continua barulhento. Confirmado que esta fase **não** acrescentou nenhum erro novo
+(diff do `tsc --noEmit` antes/depois: só remoções).
 
 ## Fase 3 — Camada de dados (fase longa)
 
@@ -147,7 +175,7 @@ ser a única camada de segurança dos dados**.
 - [ ] Mover `electron`, `electron-builder`, `puppeteer`, `concurrently` e `wait-on` para
       `optionalDependencies`, para que `npm install --omit=optional && npm run dev` suba só a web
 - [ ] Adicionar scripts `dev:web` e `start:web` no `package.json`
-- [ ] Criar `.env.local.example` com `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- [x] Criar `.env.local.example` com `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` — feito na Fase 2
 - [ ] `setup-env.js`: remover a criação de `data/` e do `NEXTAUTH_SECRET` (vira validador de `.env.local`, ou some)
 - [ ] Atualizar o README com a seção "Rodando só a interface"
 

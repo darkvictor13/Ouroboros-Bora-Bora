@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import FloatingStopwatchButton from './FloatingStopwatchButton';
 import { Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement } from 'chart.js';
-import { useSession } from 'next-auth/react';
+import { useAuth } from '../context/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import DonationModal from './DonationModal';
 import { useDonationModal } from '../context/DonationModalContext';
@@ -13,7 +13,7 @@ export default function ClientLayoutWrapper({
 }: {
   children: React.ReactNode;
 }) {
-  const { data: session, status } = useSession();
+  const { status } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { isModalOpen, closeModal } = useDonationModal();

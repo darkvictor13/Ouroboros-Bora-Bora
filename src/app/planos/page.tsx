@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useSession } from 'next-auth/react';
+import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext'; // Use useData
 import { createPlanFile } from '../actions'; // Keep this import for modals
 import Link from 'next/link';
@@ -43,7 +43,7 @@ interface PlanInfo {
 }
 
 export default function Planos() {
-  const { data: session, status } = useSession();
+  const { status } = useAuth();
   const { deletePlan, availablePlans, studyPlans, loading: dataContextLoading, refreshPlans } = useData(); // Get data from context
   const { showNotification } = useNotification();
   const [isModalOpen, setIsModalOpen] = useState(false);
