@@ -62,7 +62,7 @@ const DonutChart: React.FC<DonutChartProps> = ({ cycle, size = 300, studyHours, 
           key: `progress-${session.id}`,
           strokeDasharray: `${progressSegmentLength} ${progressCircumference - progressSegmentLength}`,
           strokeDashoffset: progressOffset,
-          color: isCompleted ? '#22c55e' : 'transparent',
+          color: isCompleted ? 'var(--success)' : 'transparent',
         },
       };
     });
@@ -73,8 +73,8 @@ const DonutChart: React.FC<DonutChartProps> = ({ cycle, size = 300, studyHours, 
   return (
     <div className="relative">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={progressRingRadius} fill="transparent" stroke="#e5e7eb" strokeWidth={strokeWidth} />
-        <circle cx={size / 2} cy={size / 2} r={mainRingRadius} fill="transparent" stroke="#e5e7eb" strokeWidth={strokeWidth} />
+        <circle cx={size / 2} cy={size / 2} r={progressRingRadius} fill="transparent" stroke="var(--border)" strokeWidth={strokeWidth} />
+        <circle cx={size / 2} cy={size / 2} r={mainRingRadius} fill="transparent" stroke="var(--border)" strokeWidth={strokeWidth} />
 
         {segments.map(segment => (
           <circle
@@ -108,7 +108,7 @@ const DonutChart: React.FC<DonutChartProps> = ({ cycle, size = 300, studyHours, 
           />
         ))}
 
-        <circle cx={size / 2} cy={size / 2} r={mainRingRadius - (strokeWidth / 2)} fill="#e5e7eb" />
+        <circle cx={size / 2} cy={size / 2} r={mainRingRadius - (strokeWidth / 2)} fill="var(--surface-2)" />
 
         <text
           x={size / 2}
@@ -116,7 +116,7 @@ const DonutChart: React.FC<DonutChartProps> = ({ cycle, size = 300, studyHours, 
           dominantBaseline="middle"
           textAnchor="middle"
           transform={`rotate(90 ${size / 2} ${size / 2})`}
-          fill="#374151"
+          fill="var(--text)"
           fontSize="24"
           fontWeight="bold"
           style={{ pointerEvents: 'none' }}

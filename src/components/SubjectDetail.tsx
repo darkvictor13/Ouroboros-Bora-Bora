@@ -7,13 +7,13 @@ import { getPlan } from '@/lib/data';
 import type { EditalTopic, PlanData } from '@/lib/data';
 import type { StudyRecord } from '@/lib/data';
 import { useData } from '@/context/DataContext';
-import { useTheme } from '@/context/ThemeContext';
 import StudyRegisterModal from '@/components/StudyRegisterModal';
 
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale } from 'chart.js';
 import type { ChartOptions } from 'chart.js';
 import 'chartjs-adapter-date-fns';
+import { useChartTheme } from '../lib/chartTheme';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale);
 
@@ -79,7 +79,7 @@ export default function SubjectDetail({ subjectName }: { subjectName: string }) 
     selectedPlanId, 
     setSelectedPlanId 
   } = useData();
-  const { theme } = useTheme();
+  const chart = useChartTheme();
 
   const [planData, setPlanData] = useState<PlanData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -212,13 +212,13 @@ export default function SubjectDetail({ subjectName }: { subjectName: string }) 
           label: label,
           data: data.map(d => d.time / 3600000),
           fill: false,
-          borderColor: 'rgb(245, 158, 11)',
+          borderColor: chart.accent,
           tension: 0.1,
         },
       ],
       unit: unit,
     };
-  }, [activeTab, aggregateDailyData, aggregateWeeklyData, aggregateMonthlyData]);
+  }, [activeTab, aggregateDailyData, aggregateWeeklyData, aggregateMonthlyData, chart.accent]);
 
   // Anotado: sem o tipo, `type: 'time'` alarga para `string` e o chart.js recusa.
   const chartOptions: ChartOptions<'line'> = useMemo(() => ({
@@ -228,13 +228,13 @@ export default function SubjectDetail({ subjectName }: { subjectName: string }) 
       legend: {
         position: 'top' as const,
         labels: {
-          color: theme === 'dark' ? '#E5E7EB' : '#1F2937',
+          color: chart.tick,
         },
       },
       title: {
         display: false,
         text: 'Evolução no Tempo',
-        color: theme === 'dark' ? '#E5E7EB' : '#1F2937',
+        color: chart.tick,
       },
     },
     scales: {
@@ -251,25 +251,25 @@ export default function SubjectDetail({ subjectName }: { subjectName: string }) 
         title: {
           display: true,
           text: 'Data',
-          color: theme === 'dark' ? '#E5E7EB' : '#1F2937',
+          color: chart.tick,
         },
         ticks: {
-          color: theme === 'dark' ? '#E5E7EB' : '#1F2937',
+          color: chart.tick,
         },
       },
       y: {
         title: {
           display: true,
           text: 'Horas de Estudo',
-          color: theme === 'dark' ? '#E5E7EB' : '#1F2937',
+          color: chart.tick,
         },
         ticks: {
-          color: theme === 'dark' ? '#E5E7EB' : '#1F2937',
+          color: chart.tick,
         },
         beginAtZero: true
       },
     },
-  }), [chartData.unit, theme]);
+  }), [chartData.unit, chart]);
 
   const openRegisterModalForNew = () => {
     setSelectedTopic(null);

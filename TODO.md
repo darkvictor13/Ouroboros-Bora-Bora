@@ -414,6 +414,20 @@ para ele; o comando é `node scripts/test-data-layer.mjs`.
       abaixo depende do Free. O que ele resolveria (migration ruim derrubando produção) está coberto
       em boa parte pelo job `migrations` do `ci.yml`, que aplica as migrations num Postgres limpo a
       cada PR. Reavaliar se o projeto sair do Free.
+- [ ] **SMTP próprio para o Supabase Auth.** O serviço de e-mail embutido do Supabase é declarado
+      "só para teste": é limitado por hora (`[auth.rate_limit] email_sent` — o `config.toml` local
+      usa 2) e, em projetos novos, **só entrega para membros da organização**. Ou seja, sem SMTP
+      próprio, o cadastro com um e-mail pessoal qualquer falha em silêncio — a conta é criada, o
+      link de confirmação nunca chega, e o usuário fica preso na tela de "Confirme seu e-mail".
+      Provedor: Resend no free tier (3 mil e-mails/mês, 100/dia) atende com folga; a configuração
+      é Authentication → Emails → SMTP Settings, mais os registros de DNS do domínio remetente.
+      **Bloqueia ligar `enable_confirmations = true`** no projeto hospedado, e é por isso que a
+      decisão sobre confirmação de e-mail em staging (ver `PLANO-STAGING.md`) depende deste item.
+      Não confundir com o problema *dos testes*: `test-e2e.mjs` e `test-rls-isolation.mjs` usam
+      `@example.com` e `@ouroboros.test`, domínios reservados e não roteáveis — nenhum SMTP, por
+      melhor que seja, entrega para eles. Lá a saída é confirmar o usuário pela Admin API
+      (`auth.admin.updateUserById(id, { email_confirm: true })`) com a `service_role key` vinda do
+      ambiente local, nunca de um secret de CI.
 
 ### Secrets e variáveis que precisam ser criados no GitHub
 
@@ -591,4 +605,5 @@ A parte cara é a **Fase 3** (~29 actions + troca de `fileName` por `planId`). T
 | Frontend (Cloudflare Pages) | R$ 0 — banda ilimitada, SSL e domínio inclusos |
 | Banco + Auth + Storage (Supabase Free) | R$ 0 — projetos inativos são pausados; ver Fase 6 |
 | CI/CD (GitHub Actions, repo público) | R$ 0 |
+| SMTP transacional (Resend free) | R$ 0 até 3 mil e-mails/mês, 100/dia |
 | Importador de guia | R$ 0 se o teste da decisão 0.2 passar |

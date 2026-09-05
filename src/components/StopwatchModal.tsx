@@ -281,7 +281,7 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
         <div className="w-full bg-gray-800/50 rounded-full h-8 mb-4 shadow-inner overflow-hidden dark:bg-gray-700/50">
           {mode === 'timer' ? (
             <div 
-              className="bg-gradient-to-r from-amber-400 to-amber-500 h-8 rounded-full transition-all duration-500 ease-out shadow-lg shadow-amber-500/30"
+              className="bg-gradient-to-r from-brand-400 to-amber-500 h-8 rounded-full transition-all duration-500 ease-out shadow-lg shadow-amber-500/30"
               style={{ width: `${timerProgress}%` }}
             ></div>
           ) : (
@@ -292,7 +292,7 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
                 backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,0.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.15) 75%, transparent 75%, transparent)',
                 backgroundSize: '40px 40px',
                 animation: isRunning ? 'barberpole 1s linear infinite' : 'none',
-                backgroundColor: '#F59E0B' // amber-500
+                backgroundColor: 'var(--accent)'
               }}
             ></div>
           )}

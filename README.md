@@ -1,10 +1,18 @@
-# Ouroboros
+<p align="center">
+  <img src="public/logo-be.png" alt="Bora Estudar Concursos" width="96">
+</p>
 
-[![GitHub license](https://img.shields.io/github/license/grebsu/Ouroboros.svg)](https://github.com/grebsu/Ouroboros/blob/master/LICENSE)
-[![GitHub package.json version](https://img.shields.io/github/package-json/version/grebsu/Ouroboros)](https://github.com/grebsu/Ouroboros/blob/master/package.json)
+# Bora Estudar Concursos
+
+[![GitHub license](https://img.shields.io/github/license/darkvictor13/Ouroboros-Bora-Bora.svg)](LICENSE)
+[![GitHub package.json version](https://img.shields.io/github/package-json/version/darkvictor13/Ouroboros-Bora-Bora)](package.json)
 <!-- Adicione mais badges aqui, ex: status de build -->
 
-O Ouroboros é uma aplicação completa para planejamento de estudos, projetada para ajudar estudantes a organizar seus horários, acompanhar o progresso e gerenciar revisões de forma eficaz.
+O **Bora Estudar Concursos** é uma aplicação completa para planejamento de estudos, projetada para ajudar concurseiros a organizar seus horários, acompanhar o progresso e gerenciar revisões de forma eficaz.
+
+Ele nasceu como um fork do [Ouroboros](https://github.com/grebsu/Ouroboros), de
+[Grebsu](https://github.com/grebsu), e mantém a licença MIT original. Veja
+[Créditos](#-créditos).
 
 ## 📖 Sumário
 - [🎥 Demonstração em Vídeo](#-demonstração-em-vídeo)
@@ -19,12 +27,14 @@ O Ouroboros é uma aplicação completa para planejamento de estudos, projetada 
     - [Build de Produção](#build-de-produção)
     - [Modo de Produção com Docker](#modo-de-produção-com-docker)
 - [🤝 Contribuição](#-contribuição)
+- [🙏 Créditos](#-créditos)
 - [📄 Licença](#-licença)
 - [📞 Contato](#-contato)
 
 ## 🎥 Demonstração em Vídeo
 
-Assista a uma breve introdução da aplicação e suas funcionalidades no vídeo abaixo:
+Os vídeos abaixo são do projeto original e ainda mostram a identidade visual do
+Ouroboros, mas as funcionalidades continuam as mesmas:
 
 **[➡️ Assistir à introdução no YouTube](https://youtu.be/nKAGOVKF7A8?si=D0Oa3fFRNpJWIz3W)**
 
@@ -34,27 +44,14 @@ Confira também o tutorial completo para aprender a usar todas as ferramentas:
 
 ## 📥 Acesso
 
-O Ouroboros é uma aplicação web: basta abrir no navegador, sem instalar nada.
+O Bora Estudar é uma aplicação web: basta abrir no navegador, sem instalar nada.
 
 > **Nota sobre a v1:** até a v1.1.3 havia também um aplicativo de desktop, em
 > Electron. A v2 descontinuou o desktop — o app virou uma SPA estática que fala
 > com o Supabase direto do navegador, e é a mesma em qualquer dispositivo. Os
 > instaladores antigos continuam nas
-> [releases](https://github.com/grebsu/Ouroboros/releases), mas guardam os dados
-> em arquivos locais e não conversam com a versão nova.
-
-## 💖 Apoie o Projeto
-
-Se o Ouroboros te ajudou nos seus estudos, considere apoiar o projeto com uma doação! Sua contribuição ajuda a manter o desenvolvimento contínuo, a implementação de novas funcionalidades e a correção de bugs. O projeto visa ajudar estudantes hipossuficientes a ter acesso a uma ferramenta de estudos poderosa, visando democratizar o estudo. Qualquer valor é muito bem-vindo e faz uma grande diferença.
-
-Você pode doar escaneando o QR Code abaixo com seu aplicativo de banco:
-
-<p align="center">
-  <img src="public/qrcode-pix.png" alt="QR Code PIX para doação" width="200">
-</p>
-
-Muito obrigado pelo seu apoio!
-
+> [releases do projeto original](https://github.com/grebsu/Ouroboros/releases),
+> mas guardam os dados em arquivos locais e não conversam com a versão nova.
 
 ## ✨ Funcionalidades
 
@@ -72,7 +69,8 @@ Muito obrigado pelo seu apoio!
 
 - **Framework:** [Next.js](https://nextjs.org/)
 - **Linguagem:** [TypeScript](https://www.typescriptlang.org/)
-- **Estilização:** [Tailwind CSS](https://tailwindcss.com/)
+- **Estilização:** [Tailwind CSS](https://tailwindcss.com/) — paleta da marca em `tailwind.config.js`, tokens de tema em `src/app/globals.css`
+- **Tipografia:** DM Sans e DM Mono, via `next/font`
 - **Componentes de UI:** [Radix UI](https://www.radix-ui.com/) & [Ícones Lucide](https://lucide.dev/)
 - **Visualização de Dados:** [Chart.js](https://www.chartjs.org/)
 - **Drag & Drop:** [dnd-kit](https://dndkit.com/)
@@ -96,11 +94,11 @@ Siga estas instruções para obter uma cópia do projeto e executá-lo em sua m�
 
 1. Clone o repositório:
    ```bash
-   git clone https://github.com/grebsu/Ouroboros.git
+   git clone https://github.com/darkvictor13/Ouroboros-Bora-Bora.git
    ```
 2. Navegue até o diretório do projeto:
    ```bash
-   cd Ouroboros
+   cd Ouroboros-Bora-Bora
    ```
 3. Instale as dependências:
    ```bash
@@ -109,7 +107,7 @@ Siga estas instruções para obter uma cópia do projeto e executá-lo em sua m�
 
 ### Configurando o Supabase
 
-O Ouroboros guarda os dados no [Supabase](https://supabase.com/) (Postgres + Auth,
+O Bora Estudar guarda os dados no [Supabase](https://supabase.com/) (Postgres + Auth,
 com Row Level Security). O app fala com ele **direto do navegador**, então tudo
 que ele precisa são duas variáveis públicas.
 
@@ -137,7 +135,7 @@ que ele precisa são duas variáveis públicas.
 
 ### Executando a Aplicação
 
-O Ouroboros é uma SPA estática: não há servidor Node em produção. O `next build`
+O Bora Estudar é uma SPA estática: não há servidor Node em produção. O `next build`
 gera a pasta `out/`, que é só arquivo — os dados vêm do Supabase direto do
 navegador, e quem os protege é a Row Level Security do banco.
 
@@ -196,10 +194,25 @@ elas precisam estar no ambiente na hora do `build`, não do `up`:
 
 Contribuições são muito bem-vindas! Se você tiver ideias, sugestões ou quiser reportar um bug, por favor, abra uma issue ou envie um pull request.
 
+## 🙏 Créditos
+
+O código deste projeto deriva do [Ouroboros](https://github.com/grebsu/Ouroboros),
+criado por [Grebsu](https://github.com/grebsu) e publicado sob a Licença MIT. O
+aviso de copyright original está preservado em [LICENSE](LICENSE), como a licença
+exige.
+
+O que mudou nesta versão: identidade visual da marca Bora Estudar Concursos
+(paleta, tipografia e logo), autenticação e camada de dados migradas para o
+Supabase.
+
+A marca **Bora Estudar Concursos**, incluindo o logo e os ícones em `public/`,
+não faz parte da Licença MIT e não é redistribuída por ela.
+
 ## 📄 Licença
 
-Este projeto está licenciado sob a Licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+O código está licenciado sob a Licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
 
 ## 📞 Contato
 
-Para dúvidas ou suporte, entre em contato com [Grebsu](mailto:glebson.olvr@gmail.com).
+Para dúvidas, sugestões ou para reportar um bug, abra uma
+[issue](https://github.com/darkvictor13/Ouroboros-Bora-Bora/issues).

@@ -15,8 +15,8 @@ interface NotificationContextType {
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   success: 'bg-green-500',
   error: 'bg-red-500',
-  warning: 'bg-amber-500',
-  info: 'bg-sky-600',
+  warning: 'bg-warning',
+  info: 'bg-brand-500',
 };
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);

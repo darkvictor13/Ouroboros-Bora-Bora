@@ -17,18 +17,38 @@
  * Uso:
  *   npm run test:e2e
  *   BASE=http://localhost:3000 npm run test:e2e
+ *   ALLOW_REMOTE=1 BASE=https://<projeto>.pages.dev npm run test:e2e
  */
 
 import { chromium } from 'playwright';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { randomBytes } from 'node:crypto';
 
 const BASE = process.env.BASE || 'http://localhost:3000';
-const stamp = Date.now();
+
+// O teste cadastra um usuário de verdade no Supabase por trás da SPA. Apontar o BASE
+// para uma URL publicada significa sujar o Auth de um projeto hospedado, então isso
+// exige consentimento explícito.
+const LOCAIS = ['127.0.0.1', 'localhost', '::1', '0.0.0.0'];
+if (!LOCAIS.includes(new URL(BASE).hostname) && process.env.ALLOW_REMOTE !== '1') {
+  console.error(
+    `\nRecusando rodar contra ${BASE}: não é um host local.\n` +
+      'O teste cadastra um usuário real no Supabase que a SPA usa.\n' +
+      'Se é isso que você quer, repita com ALLOW_REMOTE=1.\n'
+  );
+  process.exit(1);
+}
+
+// `randomBytes`, e não `Date.now()`: um e-mail derivado do relógio é enumerável por
+// força bruta. `@example.com` é reservado, então nenhum e-mail sai de fato. A senha é
+// descartável e nunca impressa — o sufixo satisfaz qualquer `password_requirements`
+// que o projeto remoto tenha ligado.
+const stamp = randomBytes(9).toString('hex');
 const EMAIL = `e2e+${stamp}@example.com`;
 const USER = `e2euser${stamp}`;
-const PASS = 'SenhaForte123!';
+const PASS = randomBytes(24).toString('base64url') + 'aA1!';
 const PLAN = `Plano E2E ${stamp}`;
 const PLAN_ICON = `Plano com Ícone ${stamp}`;
 const SUBJECT = 'Direito Constitucional';
@@ -552,6 +572,8 @@ console.log(`${ok}/${results.length} checks passaram`);
 for (const r of results.filter((r) => !r.ok)) console.log(`  FAIL: ${r.nome} :: ${String(r.detalhe).slice(0, 200)}`);
 console.log(`\nErros de console: ${errors.length}`);
 for (const e of errors.slice(0, 25)) console.log('  ' + e.slice(0, 220));
-console.log(`\nusuário do teste: ${EMAIL}   plano: ${planId}`);
+// O `username` localiza a linha em `profiles` e serve para depurar; o e-mail, não
+// impresso, é metade de um par de login.
+console.log(`\nusuário do teste: ${USER}   plano: ${planId}`);
 
 process.exit(ok === results.length && errors.length === 0 ? 0 : 1);

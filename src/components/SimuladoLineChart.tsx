@@ -3,7 +3,7 @@
 import React from 'react';
 import { Line } from 'react-chartjs-2';
 import type { ChartOptions } from 'chart.js';
-import { useTheme } from '../context/ThemeContext';
+import { useChartTheme } from '../lib/chartTheme';
 
 
 
@@ -19,12 +19,11 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
   // <html>. O chart.js não trata `color` como opção scriptable nesses pontos,
   // então o valor renderizado era a própria função. Com o tema vindo do
   // contexto, são strings — e o gráfico redesenha quando o tema muda.
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-  const strongText = isDark ? '#E5E7EB' : '#111827';
-  const mutedText = isDark ? '#D1D5DB' : '#374151';
-  const gridColor = isDark ? '#4B5563' : '#E5E7EB';
-  const surface = isDark ? '#334155' : '#F9FAFB';
+  const chart = useChartTheme();
+  const strongText = chart.tooltipText;
+  const mutedText = chart.tick;
+  const gridColor = chart.grid;
+  const surface = chart.tooltipBg;
 
   const data = {
     labels,
@@ -32,8 +31,8 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
       {
         label: chartType === 'desempenho' ? 'Desempenho (%) ' : 'Pontuação Total',
         data: chartType === 'desempenho' ? performanceData : scoreData,
-        borderColor: chartType === 'desempenho' ? 'rgb(75, 192, 192)' : 'rgb(153, 102, 255)',
-        backgroundColor: chartType === 'desempenho' ? 'rgba(75, 192, 192, 0.5)' : 'rgba(153, 102, 255, 0.5)',
+        borderColor: chartType === 'desempenho' ? chart.accent : chart.series[4],
+        backgroundColor: chartType === 'desempenho' ? chart.accent : chart.series[4],
         tension: 0.3,
         fill: false,
         pointRadius: 5,
@@ -78,7 +77,7 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
         bodyFont: {
           size: 14,
         },
-        borderColor: '#6EE7B7', // Teal-300
+        borderColor: chart.grid,
         borderWidth: 1,
         cornerRadius: 8,
         displayColors: false, // Hide color box in tooltip
@@ -138,8 +137,8 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
     },
     elements: {
       point: {
-        backgroundColor: '#6EE7B7', // Teal-300
-        borderColor: '#0D9488', // Teal-700
+        backgroundColor: chart.accent,
+        borderColor: chart.accentSoft,
         borderWidth: 2,
         radius: 5,
         hoverRadius: 7,

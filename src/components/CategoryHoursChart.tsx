@@ -12,6 +12,8 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
  * `drawingArea` é o raio útil do radar. Existe em tempo de execução, mas o
  * chart.js não o declara na tipagem pública de `RadialLinearScale`.
  */
+import { useChartTheme, getChartTheme } from '../lib/chartTheme';
+
 type RadarScale = RadialLinearScale & { drawingArea: number };
 
 // Plugin customizado para desenhar os rótulos curvados
@@ -35,7 +37,7 @@ const curvedPointLabelsPlugin = {
     ctx.save();
     const pointLabelFont = { size: 8, weight: 'bold' as const, family: 'Arial' };
     ctx.font = `${pointLabelFont.weight} ${pointLabelFont.size}px ${pointLabelFont.family}`;
-    ctx.fillStyle = '#4B5563'; // Cor para ambos os modos (cinza médio-escuro)
+    ctx.fillStyle = getChartTheme(document.documentElement.classList.contains('dark')).tick;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -104,6 +106,7 @@ const EXAMPLE_DATA: Record<string, number> = {
 };
 
 const CategoryHoursChart: React.FC<CategoryHoursChartProps> = ({ categoryStudyHours }) => {
+  const chart = useChartTheme();
   
 
   const hasRealData = categoryStudyHours && Object.values(categoryStudyHours).some(value => value > 0);
@@ -117,12 +120,12 @@ const CategoryHoursChart: React.FC<CategoryHoursChartProps> = ({ categoryStudyHo
     datasets: [{
       label: hasRealData ? 'Horas de Estudo' : 'Horas de Estudo (Exemplo)',
       data: orderedCategories.map(key => dataToShow[key] || 0),
-      backgroundColor: 'rgba(245, 158, 11, 0.4)',
-      borderColor: 'rgb(245, 158, 11)',
-      pointBackgroundColor: 'rgb(245, 158, 11)',
+      backgroundColor: chart.isDark ? 'rgba(116, 167, 255, 0.28)' : 'rgba(26, 86, 219, 0.30)',
+      borderColor: chart.accent,
+      pointBackgroundColor: chart.accent,
       pointBorderColor: '#fff',
       pointHoverBackgroundColor: '#fff',
-      pointHoverBorderColor: 'rgb(245, 158, 11)',
+      pointHoverBorderColor: chart.accent,
       pointRadius: 5,
       pointHoverRadius: 9,
       fill: true,
@@ -135,8 +138,8 @@ const CategoryHoursChart: React.FC<CategoryHoursChartProps> = ({ categoryStudyHo
     maintainAspectRatio: false,
     scales: {
       r: {
-        angleLines: { display: true, color: '#D1D5DB', lineWidth: 1 },
-        grid: { circular: true, color: '#D1D5DB' },
+        angleLines: { display: true, color: chart.grid, lineWidth: 1 },
+        grid: { circular: true, color: chart.grid },
         suggestedMin: 0,
         ticks: {
           display: false,
@@ -151,7 +154,7 @@ const CategoryHoursChart: React.FC<CategoryHoursChartProps> = ({ categoryStudyHo
         display: false,
         text: hasRealData ? 'Distribuição de Horas por Categoria' : 'Exemplo de Gráfico de Categorias',
         font: { size: 18, weight: 'bold' as const },
-        color: '#4B5563',
+        color: chart.tick,
         padding: {
           top: 10,
           bottom: 20,
@@ -162,12 +165,16 @@ const CategoryHoursChart: React.FC<CategoryHoursChartProps> = ({ categoryStudyHo
         position: 'bottom' as const,
         labels: {
           font: { size: 14 },
-          color: '#4B5563'
+          color: chart.tick
         }
       },
       tooltip: {
         enabled: true,
-        backgroundColor: '#334155',
+        backgroundColor: chart.tooltipBg,
+        titleColor: chart.tooltipText,
+        bodyColor: chart.tooltipText,
+        borderColor: chart.grid,
+        borderWidth: 1,
         titleFont: { size: 14, weight: 'bold' as const },
         bodyFont: { size: 12 },
         callbacks: {
@@ -177,11 +184,8 @@ const CategoryHoursChart: React.FC<CategoryHoursChartProps> = ({ categoryStudyHo
       datalabels: {
         display: true,
         formatter: (value: number) => formatTimeLabel(value),
-        color: '#4B5563',
-        backgroundColor: () => {
-          const isDarkMode = document.documentElement.classList.contains('dark');
-          return isDarkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.7)';
-        },
+        color: chart.tick,
+        backgroundColor: chart.isDark ? 'rgba(8, 13, 22, 0.62)' : 'rgba(255, 255, 255, 0.72)',
         borderRadius: 4,
         padding: 4,
         font: {

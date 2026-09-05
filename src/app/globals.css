@@ -1,11 +1,47 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
   overflow: hidden;
+}
+
+/*
+ * Tokens da identidade Bora Estudar.
+ * Usados pelo que não passa pelo Tailwind: Chart.js e o CSS do react-datepicker.
+ */
+:root {
+  --bg: #F5F4F0;
+  --surface: #FFFFFF;
+  --surface-2: #EFEEEA;
+  --border: #E4E2DC;
+  --border-strong: #CCC9C1;
+  --text: #1A1916;
+  --text-2: #6B6860;
+  --text-3: #A8A69F;
+  --accent: #1A56DB;
+  --accent-light: #EBF0FD;
+  --accent-mid: #3B6FE8;
+  --success: #1A7A4A;
+  --warning: #9A5A00;
+  --danger: #B83232;
+}
+
+html.dark {
+  --bg: #080D16;
+  --surface: #0E1624;
+  --surface-2: #141F31;
+  --border: #26364D;
+  --border-strong: #344B69;
+  --text: #F5F8FF;
+  --text-2: #C4CDDA;
+  --text-3: #8793A5;
+  --accent: #74A7FF;
+  --accent-light: #13284C;
+  --accent-mid: #91B8FF;
+  --success: #69D7A2;
+  --warning: #F0B85E;
+  --danger: #FF8E98;
 }
 
 @layer base {
@@ -16,7 +52,6 @@ body {
     @apply text-gray-50 bg-gray-900;
   }
   body {
-    font-family: 'Roboto', sans-serif;
     @apply antialiased;
   }
 }

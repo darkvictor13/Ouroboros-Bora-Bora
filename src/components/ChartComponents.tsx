@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart, ChartOptions, TooltipItem } from 'chart.js';
+import { useChartTheme } from '../lib/chartTheme';
 
 /**
  * Opção fora do vocabulário do chart.js, lida só pelo plugin abaixo. Declarada
@@ -53,6 +54,7 @@ interface ChartComponentsProps {
 }
 
 const ChartComponents: React.FC<ChartComponentsProps> = ({ stats }) => {
+  const chartTheme = useChartTheme();
   const [chartJsLoaded, setChartJsLoaded] = useState(false);
 
   useEffect(() => {
@@ -65,11 +67,8 @@ const ChartComponents: React.FC<ChartComponentsProps> = ({ stats }) => {
     datasets: [
       {
         data: [stats.totalCorrectQuestions, stats.totalQuestions - stats.totalCorrectQuestions],
-                backgroundColor: ['rgb(245, 158, 11)', 'rgb(255, 99, 132)'],
-        borderColor: [
-          'rgba(245, 158, 11, 1)',
-          'rgba(234, 179, 8, 1)',
-        ],
+        backgroundColor: [chartTheme.accent, chartTheme.danger],
+        borderColor: [chartTheme.accent, chartTheme.danger],
       },
     ],
   };
@@ -100,14 +99,15 @@ const ChartComponents: React.FC<ChartComponentsProps> = ({ stats }) => {
             return label;
           }
         },
-        titleColor: '#4B5563',
-        bodyColor: '#4B5563',
+        titleColor: chartTheme.tooltipText,
+        bodyColor: chartTheme.tooltipText,
+        backgroundColor: chartTheme.tooltipBg,
       }
     },
     elements: {
       center: {
         text: `${correctPercentage}%`,
-        color: '#f59e0b', // amber-500
+        color: chartTheme.accent,
         fontStyle: 'Arial',
         fontSize: 24,
       }

@@ -6,15 +6,36 @@
  * caminho que o browser usa —, que o usuário B não enxerga, não altera e não
  * apaga nada do usuário A, e que a anon key sozinha não lê nada.
  *
+ * Cada execução cria contas novas, com e-mail aleatório e senha de uso único que não
+ * é impressa em lugar nenhum — contra um banco hospedado elas ficam inertes.
+ *
  * Uso:
  *   npm run test:rls                          # contra o `supabase start` local
- *   SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run test:rls
+ *   ALLOW_REMOTE=1 SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run test:rls
  */
+
+import { randomBytes } from 'node:crypto';
 
 const URL_BASE = process.env.SUPABASE_URL ?? 'http://127.0.0.1:54321';
 const ANON_KEY =
   process.env.SUPABASE_ANON_KEY ??
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+
+// O teste cria usuários de verdade via `signUp`. Contra um banco hospedado isso deixa
+// contas para tras, então exigimos o consentimento explícito de ALLOW_REMOTE=1 — protege
+// contra rodar `npm run test:rls` com o ambiente apontado para staging sem querer.
+const LOCAIS = ['127.0.0.1', 'localhost', '::1', '0.0.0.0'];
+if (!LOCAIS.includes(new URL(URL_BASE).hostname) && process.env.ALLOW_REMOTE !== '1') {
+  console.error(
+    `\nRecusando rodar contra ${URL_BASE}: não é um Supabase local.\n` +
+      'O teste cria usuários reais. Se é isso que você quer, repita com ALLOW_REMOTE=1.\n'
+  );
+  process.exit(1);
+}
+
+/** Senha de uso único, com entropia de sobra e nunca impressa. O sufixo satisfaz
+ *  qualquer `password_requirements` que o projeto remoto possa ter ligado. */
+const senhaDescartavel = () => randomBytes(24).toString('base64url') + 'aA1!';
 
 const TABELAS = [
   'profiles',
@@ -78,9 +99,11 @@ async function rest(token, metodo, caminho, { body, prefer } = {}) {
 }
 
 async function criarUsuario(rotulo) {
-  const sufixo = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  // `randomBytes`, e não o timestamp de antes: um e-mail derivado do relógio é
+  // enumerável por força bruta. O domínio `.test` é reservado e não roteável.
+  const sufixo = randomBytes(12).toString('hex');
   const email = `rls-${rotulo}-${sufixo}@ouroboros.test`;
-  const senha = `Senha!${sufixo}`;
+  const senha = senhaDescartavel();
 
   const sessao = await auth('signup', {
     email,
@@ -91,7 +114,7 @@ async function criarUsuario(rotulo) {
   const token = sessao.access_token ?? (await auth('token?grant_type=password', { email, password: senha })).access_token;
   if (!token) throw new Error(`Não veio access_token para o usuário ${rotulo}. Confirmação de e-mail está ligada?`);
 
-  return { rotulo, email, token, id: sessao.user?.id ?? sessao.id };
+  return { rotulo, token, id: sessao.user?.id ?? sessao.id };
 }
 
 /** Popula uma linha em cada tabela para o usuário dono do token. */
@@ -165,8 +188,9 @@ async function main() {
 
   const a = await criarUsuario('a');
   const b = await criarUsuario('b');
-  console.log(`Usuário A: ${a.email}`);
-  console.log(`Usuário B: ${b.email}`);
+  // O `id` basta para depurar e, ao contrário do e-mail, não é metade de um par de login.
+  console.log(`Usuário A: ${a.id}`);
+  console.log(`Usuário B: ${b.id}`);
 
   const dadosDeA = await semear(a);
   await semear(b);

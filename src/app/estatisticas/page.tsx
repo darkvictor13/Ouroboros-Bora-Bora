@@ -15,6 +15,7 @@ import 'chartjs-adapter-date-fns';
 import { HierarchicalPerformanceNode, StudyRecord } from '../../context/DataContext'; // Import HierarchicalPerformanceNode
 
 import CategoryHoursChart from '../../components/CategoryHoursChart';
+import { useChartTheme } from '../../lib/chartTheme';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale, BarElement, RadialLinearScale);
 
@@ -29,6 +30,7 @@ export default function Estatisticas() {
     availableSubjects,
     availableCategories,
   } = useData();
+  const chart = useChartTheme();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = React.useState(false);
   const [chartJsLoaded, setChartJsLoaded] = React.useState(false);
@@ -74,14 +76,14 @@ export default function Estatisticas() {
         label: 'Acertos Diários',
         data: Object.keys(stats.dailyQuestionStats ?? {}).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()).map(date => (stats.dailyQuestionStats ?? {})[date].correct),
         fill: false,
-        borderColor: 'rgb(245, 158, 11)',
+        borderColor: chart.accent,
         tension: 0.1,
       },
       {
         label: 'Erros Diários',
         data: Object.keys(stats.dailyQuestionStats ?? {}).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()).map(date => (stats.dailyQuestionStats ?? {})[date].incorrect),
         fill: false,
-        borderColor: 'rgb(255, 99, 132)',
+        borderColor: chart.danger,
         tension: 0.1,
       },
     ],
@@ -95,7 +97,7 @@ export default function Estatisticas() {
       legend: {
         position: 'top' as const,
         labels: {
-          color: '#4B5563', // Cor para ambos os modos (cinza médio-escuro)
+          color: chart.tick,
         }
       },
       title: {
@@ -103,8 +105,11 @@ export default function Estatisticas() {
         text: 'Acertos e Erros Diários',
       },
       tooltip: {
-        titleColor: '#4B5563', // Cor do título do tooltip
-        bodyColor: '#4B5563', // Cor do corpo do tooltip
+        titleColor: chart.tooltipText,
+        bodyColor: chart.tooltipText,
+        backgroundColor: chart.tooltipBg,
+        borderColor: chart.grid,
+        borderWidth: 1,
       },
       zoom: {
         pan: {
@@ -132,27 +137,27 @@ export default function Estatisticas() {
         title: {
           display: true,
           text: 'Data',
-          color: '#4B5563',
+          color: chart.tick,
         },
         ticks: {
-          color: '#4B5563',
+          color: chart.tick,
         },
         grid: {
-          color: '#D1D5DB',
+          color: chart.grid,
         }
       },
       y: {
         title: {
           display: true,
           text: 'Quantidade de Questões',
-          color: '#4B5563',
+          color: chart.tick,
         },
         beginAtZero: true,
         ticks: {
-          color: '#4B5563',
+          color: chart.tick,
         },
         grid: {
-          color: '#D1D5DB',
+          color: chart.grid,
         }
       },
     },
@@ -183,7 +188,7 @@ export default function Estatisticas() {
   };
 
   const getPerformancePillColor = (p: number) => {
-    if (p >= 80) return 'bg-gradient-to-r from-amber-400 to-amber-200 text-amber-900 font-bold animate-pulse';
+    if (p >= 80) return 'bg-gradient-to-r from-brand-400 to-amber-200 text-amber-900 font-bold animate-pulse';
     if (p >= 60) return 'bg-yellow-200 text-yellow-800';
     return 'bg-red-200 text-red-800';
   };
@@ -357,8 +362,8 @@ export default function Estatisticas() {
                   datasets: [{
                     label: 'Horas de Estudo',
                     data: Object.keys(stats.dailyStudyHours ?? {}).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()).map(date => (stats.dailyStudyHours ?? {})[date]),
-                    backgroundColor: 'rgb(245, 158, 11)',
-                    borderColor: 'rgb(245, 158, 11)',
+                    backgroundColor: chart.accent,
+                    borderColor: chart.accent,
                     borderWidth: 1
                   }]
                 }}
@@ -368,28 +373,31 @@ export default function Estatisticas() {
                   scales: {
                     x: {
                       title: { display: false },
-                      ticks: { font: { size: 12 }, color: '#4B5563' },
-                      grid: { color: '#D1D5DB' }
+                      ticks: { font: { size: 12 }, color: chart.tick },
+                      grid: { color: chart.grid }
                     },
                     y: {
                       title: { display: false, text: 'Horas' },
                       min: 0,
                       max: 8,
-                      ticks: { stepSize: 2, color: '#4B5563' },
-                      grid: { color: '#D1D5DB' }
+                      ticks: { stepSize: 2, color: chart.tick },
+                      grid: { color: chart.grid }
                     }
                   },
                   plugins: {
                     legend: { display: false },
                     tooltip: {
                       enabled: true,
-                      titleColor: '#4B5563',
-                      bodyColor: '#4B5563',
+                      titleColor: chart.tooltipText,
+                      bodyColor: chart.tooltipText,
+                      backgroundColor: chart.tooltipBg,
+                      borderColor: chart.grid,
+                      borderWidth: 1,
                     },
                     datalabels: {
                       anchor: 'end',
                       align: 'top',
-                      color: 'rgb(245, 158, 11)',
+                      color: chart.accent,
                       font: { size: 12 },
                       formatter: (value: number) => value > 0 ? `${value.toFixed(1)}h` : ''
                     }
@@ -423,8 +431,8 @@ export default function Estatisticas() {
                     datasets: [{
                       label: 'Horas de Estudo',
                       data: sortedSubjectHours.map(([, hours]) => hours),
-                      backgroundColor: 'rgb(245, 158, 11)',
-                      borderColor: 'rgb(245, 158, 11)',
+                      backgroundColor: chart.accent,
+                      borderColor: chart.accent,
                       borderWidth: 1,
                       barPercentage: 0.8,
                       categoryPercentage: 0.8
@@ -438,26 +446,29 @@ export default function Estatisticas() {
                       x: {
                         title: { display: false },
                         min: 0,
-                        ticks: { stepSize: 4, callback: (value: string | number) => `${value}h`, color: '#4B5563' },
-                        grid: { color: '#D1D5DB' }
+                        ticks: { stepSize: 4, callback: (value: string | number) => `${value}h`, color: chart.tick },
+                        grid: { color: chart.grid }
                       },
                       y: {
                         title: { display: false },
-                        ticks: { font: { size: 12 }, color: '#4B5563' },
-                        grid: { color: '#D1D5DB' }
+                        ticks: { font: { size: 12 }, color: chart.tick },
+                        grid: { color: chart.grid }
                       }
                     },
                     plugins: {
                       legend: { display: false },
                       tooltip: {
                         enabled: true,
-                        titleColor: '#4B5563',
-                        bodyColor: '#4B5563',
+                        titleColor: chart.tooltipText,
+                        bodyColor: chart.tooltipText,
+                        backgroundColor: chart.tooltipBg,
+                        borderColor: chart.grid,
+                        borderWidth: 1,
                       },
                       datalabels: {
                         anchor: 'end',
                         align: 'right',
-                        color: 'rgb(245, 158, 11)',
+                        color: chart.accent,
                         font: { size: 12 },
                         formatter: (value: number) => {
                           const hours = Math.floor(value);
@@ -493,7 +504,7 @@ export default function Estatisticas() {
                       {
                         label: 'Acertos',
                         data: Object.keys(stats.subjectPerformance ?? {}).sort().map(subject => parseFloat(((stats.subjectPerformance ?? {})[subject]?.correctPercentage || 0).toFixed(1))),
-                        backgroundColor: 'rgb(245, 158, 11)',
+                        backgroundColor: chart.accent,
                       },
                       {
                         label: 'Erros',
@@ -508,28 +519,31 @@ export default function Estatisticas() {
                     scales: {
                       x: {
                         title: { display: false },
-                        ticks: { font: { size: 12 }, color: '#4B5563' },
-                        grid: { color: '#D1D5DB' }
+                        ticks: { font: { size: 12 }, color: chart.tick },
+                        grid: { color: chart.grid }
                       },
                       y: {
                         title: { display: false },
                         min: 0,
                         max: 100,
-                        ticks: { stepSize: 20, callback: (value: string | number) => `${value}%`, color: '#4B5563' },
-                        grid: { color: '#D1D5DB' }
+                        ticks: { stepSize: 20, callback: (value: string | number) => `${value}%`, color: chart.tick },
+                        grid: { color: chart.grid }
                       }
                     },
                     plugins: {
-                      legend: { display: true, position: 'bottom' as const, labels: { boxWidth: 10, color: '#4B5563' } },
+                      legend: { display: true, position: 'bottom' as const, labels: { boxWidth: 10, color: chart.tick } },
                       tooltip: {
                         enabled: true,
-                        titleColor: '#4B5563',
-                        bodyColor: '#4B5563',
+                        titleColor: chart.tooltipText,
+                        bodyColor: chart.tooltipText,
+                        backgroundColor: chart.tooltipBg,
+                        borderColor: chart.grid,
+                        borderWidth: 1,
                       },
                       datalabels: {
                         anchor: 'end',
                         align: 'top',
-                        color: 'rgb(245, 158, 11)',
+                        color: chart.accent,
                         font: { size: 12 },
                         formatter: (value: number) => value > 0 ? `${value.toFixed(1)}%` : ''
                       }

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Bar } from 'react-chartjs-2';
 import type { TooltipItem } from 'chart.js';
+import { useChartTheme } from '../lib/chartTheme';
 
 
 
@@ -14,6 +15,7 @@ interface WeeklyStudyChartProps {
 }
 
 const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }: WeeklyStudyChartProps) => {
+  const chart = useChartTheme();
   const [viewMode, setViewMode] = useState('time'); // 'time' or 'questions'
 
   if (!dailyStudyHours || !dailyQuestionStats) {
@@ -71,8 +73,8 @@ const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }: WeeklyStudyCh
       {
         label: 'Horas de Estudo',
         data: processChartData(dailyStudyHours, 'hours'),
-        backgroundColor: '#fbbf24',
-        borderColor: '#f59e0b',
+        backgroundColor: chart.accent,
+        borderColor: chart.accent,
         borderWidth: 1,
       },
     ],
@@ -84,8 +86,8 @@ const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }: WeeklyStudyCh
       {
         label: 'Questões Resolvidas',
         data: processChartData(dailyQuestionStats, 'total'), 
-        backgroundColor: '#fcd34d',
-        borderColor: '#eab308',
+        backgroundColor: chart.accentSoft,
+        borderColor: chart.accentSoft,
         borderWidth: 1,
       },
     ],
@@ -122,19 +124,19 @@ const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }: WeeklyStudyCh
           display: false,
         },
         ticks: {
-          color: '#4b5563', // gray-700
+          color: chart.tick,
         },
       },
       y: {
         beginAtZero: true,
         ticks: {
-          color: '#4b5563', // gray-700
+          color: chart.tick,
           callback: function(value: string | number) {
             return viewMode === 'time' ? `${value}h` : value;
           }
         },
         grid: {
-          color: '#e5e7eb', // gray-200
+          color: chart.grid,
         },
       },
     },

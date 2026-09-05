@@ -5,8 +5,6 @@ import FloatingStopwatchButton from './FloatingStopwatchButton';
 import { Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement } from 'chart.js';
 import { useAuth } from '../context/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
-import DonationModal from './DonationModal';
-import { useDonationModal } from '../context/DonationModalContext';
 
 export default function ClientLayoutWrapper({
   children,
@@ -16,7 +14,6 @@ export default function ClientLayoutWrapper({
   const { status } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const { isModalOpen, closeModal } = useDonationModal();
 
   useEffect(() => {
     Chart.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement);
@@ -50,7 +47,6 @@ export default function ClientLayoutWrapper({
       <>
         {children}
         <FloatingStopwatchButton isVisible={pathname !== '/login'} />
-        <DonationModal isOpen={isModalOpen} onClose={closeModal} />
       </>
     );
   }
