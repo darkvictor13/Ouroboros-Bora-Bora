@@ -10,8 +10,8 @@
 > | 0 — credenciais de teste | **feita** — senha aleatória por execução, e-mail com `randomBytes`, nada de credencial no stdout, guarda `ALLOW_REMOTE` nos dois scripts |
 > | A — Supabase remoto | **feita e verificada** — migrations 0001/0002 aplicadas, Auth configurado, `mailer_autoconfirm: true` |
 > | B — Cloudflare Pages | **feita** — projeto criado com `--production-branch=master` e primeiro deploy manual no ar |
-> | C — GitHub | **parcial** — environment `staging` criado, `deploy.yml` apontado para ele, 5 de 8 secrets postos |
-> | D — verificação manual | **feita** — RLS e E2E passam contra o remoto (ver abaixo); o ciclo *automático* ainda não rodou |
+> | C — GitHub | **feita** — environment `staging` criado, `deploy.yml` apontado para ele, 8 de 8 secrets e a variable postos |
+> | D — ciclo automático | **feito e verde** — ver abaixo |
 >
 > ### Verificação contra staging (2026-09-05)
 >
@@ -28,13 +28,31 @@
 >   comentário da migration descreve um efeito que não acontece), e leaked password
 >   protection desligada.
 >
+> ### Primeiro ciclo automático (run 33988191275, commit 9d79d57)
+>
+> Os dois jobs verdes: `migrations` (`db push`, no-op porque as duas já estavam aplicadas) e
+> `deploy` (`npm ci`, `npm run build`, `wrangler pages deploy`). O Cloudflare registrou o
+> deployment como **`production` / `master`** — que é o sinal de que o
+> `--production-branch=master` da Etapa B estava certo; se estivesse errado teria vindo como
+> `preview`. Conferido que o bundle buildado pelo CI, a partir dos secrets, aponta para
+> `ttlfqwkavesblklhutoh.supabase.co` e não tem resíduo de `127.0.0.1:54321`.
+>
+> Os três workflows aparecem como **`active`**, incluindo o `Keepalive do Supabase` — o
+> schedule **não** foi desabilitado pelo fork, então a pausa por inatividade está coberta.
+>
+> Anotação do runner: `actions/checkout@v4`, `actions/setup-node@v4`,
+> `supabase/setup-cli@v1` e `cloudflare/wrangler-action@v3` ainda declaram Node 20, que está
+> deprecado e é forçado para Node 24. Não quebra nada hoje; é bump de `uses:` quando quebrar.
+>
 > ### Pendências
 >
-> 1. Os 3 secrets restantes: `SUPABASE_DB_PASSWORD`, `SUPABASE_DB_URL`
->    (Database → Connection string → URI) e `CLOUDFLARE_API_TOKEN`
->    (My Profile → API Tokens, permissão `Account → Cloudflare Pages → Edit`).
-> 2. Commitar e dar push na `master` para o `deploy.yml` rodar pela primeira vez.
-> 3. Conferir na aba Actions que o `keepalive.yml` aparece na lista de schedules — fork.
+> Nenhuma para o ambiente funcionar. Opcionais, registradas para não se perderem:
+>
+> 1. `scripts/purge-test-users.mjs` — cada execução dos testes deixa um usuário no Auth de
+>    staging, e hoje a limpeza é manual pelo painel.
+> 2. Os dois `WARN` do advisor (abaixo): o `revoke execute` da `0001` e o leaked password
+>    protection.
+> 3. `public/qrcode-pix.png` foi removido neste commit, mas continua no histórico público.
 >
 > ### Achado da Etapa B: `public/_redirects` é inerte
 >
