@@ -17,11 +17,8 @@ const FloatingStopwatchButton: React.FC<FloatingStopwatchButtonProps> = ({ isVis
   const [showStopwatchModal, setShowStopwatchModal] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<StudyRecord | null>(null);
-  const [stopwatchModalSubject, setStopwatchModalSubject] = useState<string | undefined>(undefined);
-  const [stopwatchTime, setStopwatchTime] = useState(0);
 
   const openStopwatchModal = () => {
-    setStopwatchModalSubject(''); // Define um valor padrão
     setShowStopwatchModal(true);
   };
 

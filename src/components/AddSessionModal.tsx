@@ -14,7 +14,10 @@ interface AddSessionModalProps {
 }
 
 const AddSessionModal: React.FC<AddSessionModalProps> = ({ isOpen, onClose }) => {
-  const { studyCycle, setStudyCycle, selectedPlanId } = useData();
+  const {
+    setStudyCycle,
+    selectedPlanId,
+  } = useData();
   const { showNotification } = useNotification();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>('');

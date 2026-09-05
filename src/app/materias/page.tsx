@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { Suspense, useMemo, useState } from 'react';
 import { useData } from '../../context/DataContext';
-import { FaBookOpen, FaQuestionCircle, FaChartLine, FaEye, FaEdit, FaTrash } from 'react-icons/fa';
-import { useRouter } from 'next/navigation';
+import { FaBookOpen, FaQuestionCircle, FaChartLine, FaEye } from 'react-icons/fa';
+import { useRouter, useSearchParams } from 'next/navigation';
+import SubjectDetail from '../../components/SubjectDetail';
 
 // Função auxiliar para formatar o tempo
 const formatTime = (milliseconds: number) => {
@@ -16,7 +17,7 @@ const formatTime = (milliseconds: number) => {
   return `${hours}h ${minutes}m`;
 };
 
-export default function MateriasPage() {
+function SubjectList() {
   const { studyPlans, studyRecords, loading } = useData();
   const router = useRouter();
   const [hoveredSubject, setHoveredSubject] = useState<string | null>(null);
@@ -162,7 +163,7 @@ export default function MateriasPage() {
                   style={{ backgroundColor: `${subject.color}E6` }} // Usar a cor da disciplina com 90% de opacidade
                 >
                   <button
-                    onClick={() => router.push(`/materias/${encodeURIComponent(subject.name)}`)}
+                    onClick={() => router.push(`/materias?nome=${encodeURIComponent(subject.name)}`)}
                     className="bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 p-3 rounded-full hover:bg-gray-200 transition-colors shadow-md"
                     title="Visualizar Detalhes"
                   >
@@ -175,5 +176,23 @@ export default function MateriasPage() {
         </div>
       </div>
     </div>
+  );
+}
+/**
+ * `/materias` mostra a visão geral; `/materias?nome=<x>`, o detalhe da matéria.
+ * Mesma troca de `[subjectName]` por query string feita em `/planos` — ver o
+ * comentário de `PlanosRouter`.
+ */
+function MateriasRouter() {
+  // O Next já devolve o valor decodificado; o detalhe não precisa decodificar.
+  const subjectName = useSearchParams().get('nome');
+  return subjectName ? <SubjectDetail subjectName={subjectName} /> : <SubjectList />;
+}
+
+export default function MateriasPage() {
+  return (
+    <Suspense fallback={null}>
+      <MateriasRouter />
+    </Suspense>
   );
 }

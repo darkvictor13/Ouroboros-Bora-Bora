@@ -26,13 +26,18 @@ import {
   updateTopicWeight as updateTopicWeightOnServer,
 } from '@/lib/data';
 import type {
+  BackupClientData,
+  BackupData,
   EditalSubject,
   EditalTopic,
+  LegacyCycleGroups,
   PlanData,
+  ReminderNote,
   ReviewRecord,
   SimuladoRecord,
   StudyCycleData,
   StudyRecord,
+  StudySession,
 } from '@/lib/data';
 import { useNotification } from './NotificationContext';
 
@@ -76,11 +81,17 @@ export interface ComputedEditalSubject extends EditalSubject {
   topics: ComputedEditalTopic[];
 }
 
-interface Filters {
-  subject: string;
-  category: string;
-  startDate: string;
-  endDate: string;
+/** O que o `FilterModal` emite. Objeto vazio significa "sem filtro". */
+export interface Filters {
+  subjects?: string[];
+  categories?: string[];
+  topics?: string[];
+  startDate?: Date | string | null;
+  endDate?: Date | string | null;
+  minDuration?: number;
+  maxDuration?: number;
+  minPerformance?: number;
+  maxPerformance?: number;
 }
 
 export interface SubjectPerformance {
@@ -132,12 +143,6 @@ export interface ConsistencyData {
   active: boolean;
 }
 
-export interface ReminderNote {
-  id: string;
-  text: string;
-  completed: boolean;
-}
-
 export interface TopicPerformanceMetrics {
   subjectId: string; // Adicionado para referência estável
   subject: string;
@@ -154,12 +159,18 @@ export interface TopicScore extends TopicPerformanceMetrics {
   justification: string;
 }
 
-export interface StudySession {
-  id: any;
-  subjectId: string; // ID da matéria
-  subject: string; // Manter por enquanto para compatibilidade e exibição
-  duration: number;
-  color: string;
+// Reexportados: os dois moram em `@/lib/data` porque `StudyCycleData` os
+// contém, e a camada de dados não pode depender do contexto de UI.
+export type { StudySession, ReminderNote } from '@/lib/data';
+
+/** O que o `CycleCreationModal` manda para gerar um ciclo automático. */
+export interface GenerateCycleSettings {
+  studyHours: number;
+  minSession: number;
+  maxSession: number;
+  subjectSettings: { [subjectId: string]: { importance: number; knowledge: number } };
+  subjects: EditalSubject[];
+  weeklyQuestionsGoal: string;
 }
 
 export interface Stats {
@@ -200,11 +211,10 @@ const calculateStats = async (
   studyRecords: StudyRecord[],
   selectedPlanId: string,
   activeFilters: Filters,
-  studyPlans: any[],
+  studyPlans: PlanData[],
   availablePlanIds: string[],
   consistencyOffset: number,
-  studyDays: string[],
-  studyCycle: StudySession[] | null
+  studyDays: string[]
 ): Promise<Stats> => {
   let totalCorrectQuestions = 0;
   let totalQuestions = 0;
@@ -238,7 +248,7 @@ const calculateStats = async (
   const currentPlanIndex = availablePlanIds.indexOf(selectedPlanId);
   const currentPlanData = studyPlans[currentPlanIndex];
 
-  const initializeTopicsRecursively = (topics: any[], parentTopicText: string = ''): ComputedEditalTopic[] => {
+  const initializeTopicsRecursively = (topics: EditalTopic[], parentTopicText: string = ''): ComputedEditalTopic[] => {
     return (topics || []).flatMap(topic => {
       let cleanedTopicText = topic.topic_text;
       if (parentTopicText && cleanedTopicText.startsWith(parentTopicText)) {
@@ -262,14 +272,14 @@ const calculateStats = async (
   };
 
   if (currentPlanData) {
-    let subjectsToProcess: any[] = [];
+    let subjectsToProcess: EditalSubject[] = [];
     if (Array.isArray(currentPlanData)) {
       subjectsToProcess = currentPlanData;
     } else if (currentPlanData && typeof currentPlanData === 'object' && Array.isArray(currentPlanData.subjects)) {
       subjectsToProcess = currentPlanData.subjects;
     }
 
-    const uniqueSubjectsMap = new Map<string, any>();
+    const uniqueSubjectsMap = new Map<string, EditalSubject>();
     subjectsToProcess.forEach(s => {
         if (s && typeof s === 'object' && s.subject) {
             uniqueSubjectsMap.set(s.subject, s);
@@ -278,8 +288,8 @@ const calculateStats = async (
     const uniqueSubjects = Array.from(uniqueSubjectsMap.values());
 
     editalData = uniqueSubjects
-      .filter((subject: any) => subject && typeof subject === 'object')
-      .map((subject: any) => ({
+      .filter((subject) => subject && typeof subject === 'object')
+      .map((subject) => ({
         id: subject.id,
         subject: subject.subject,
         color: subject.color,
@@ -292,14 +302,18 @@ const calculateStats = async (
 
   let filteredStudyRecords = studyRecords;
 
-  if (activeFilters.subject) {
-    const subjectId = editalData.find(s => s.subject === activeFilters.subject)?.id;
-    if (subjectId) {
-      filteredStudyRecords = filteredStudyRecords.filter(record => record.subjectId === subjectId);
+  if (activeFilters.subjects?.length) {
+    const ids = new Set(
+      editalData.filter(s => activeFilters.subjects!.includes(s.subject)).map(s => s.id)
+    );
+    if (ids.size > 0) {
+      filteredStudyRecords = filteredStudyRecords.filter(record => ids.has(record.subjectId));
     }
   }
-  if (activeFilters.category) {
-    filteredStudyRecords = filteredStudyRecords.filter(record => record.category === activeFilters.category);
+  if (activeFilters.categories?.length) {
+    filteredStudyRecords = filteredStudyRecords.filter(
+      record => activeFilters.categories!.includes(record.category)
+    );
   }
   if (activeFilters.startDate) {
     const startDate = new Date(activeFilters.startDate);
@@ -647,7 +661,7 @@ interface DataContextType {
   handleConsistencyNav: (direction: number) => void;
   studyCycle: StudySession[] | null;
   setStudyCycle: React.Dispatch<React.SetStateAction<StudySession[] | null>>;
-  generateStudyCycle: (settings: any) => void;
+  generateStudyCycle: (settings: GenerateCycleSettings) => void;
   resetStudyCycle: () => void;
   loading: boolean;
   sessionProgressMap: { [key: string]: number };
@@ -681,8 +695,8 @@ interface DataContextType {
   toggleReminderNote: (id: string) => void;
   deleteReminderNote: (id: string) => void;
   updateReminderNote: (id: string, newText: string) => void;
-  exportAllData: () => any;
-  importAllData: (data: any) => Promise<void>;
+  exportAllData: () => Promise<BackupData & { clientData: BackupClientData }>;
+  importAllData: (data: BackupData) => Promise<void>;
   deletePlan: (planId: string) => Promise<void>;
   renameSubject: (subjectId: string, newName: string) => Promise<void>;
   saveSubject: (subjectData: { id?: string; subject: string; topics: EditalTopic[]; color: string }) => Promise<{ success: boolean; error?: string; subjectId?: string; }>;
@@ -700,7 +714,7 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 
 const calculateTopicScores = (
   studyRecords: StudyRecord[],
-  studyPlans: any[],
+  studyPlans: PlanData[],
   selectedPlanId: string,
   availablePlanIds: string[]
 ): TopicScore[] => {
@@ -812,9 +826,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [reviewRecords, setReviewRecords] = useState<ReviewRecord[]>([]);
   const [consistencyOffset, setConsistencyOffset] = useState(0);
-  const [activeFilters, setActiveFilters] = useState<Filters>({
-    subject: '', category: '', startDate: '', endDate: '',
-  });
+  const [activeFilters, setActiveFilters] = useState<Filters>({});
   const [studyCycle, setStudyCycle] = useState<StudySession[] | null>(null);
   const [sessionProgressMap, setSessionProgressMap] = useState<{[key: string]: number}>({});
   const [completedCycles, setCompletedCycles] = useState(0);
@@ -830,7 +842,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [studyDays, setStudyDays] = useState<string[]>(['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']);
   const [reminderNotes, setReminderNotes] = useState<ReminderNote[]>([]);
   const [topicScores, setTopicScores] = useState<TopicScore[]>([]);
-  const [subjects, setSubjects] = useState<EditalSubject[]>([]);
   const [isPlanDataLoaded, setIsPlanDataLoaded] = useState(false);
   const [cycleGenerationTimestamp, setCycleGenerationTimestamp] = useState<number | null>(null);
 
@@ -928,7 +939,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     studyRecords.forEach(record => subjects.add(record.subject));
     studyPlans.forEach(plan => {
       if (plan && plan.subjects) {
-        plan.subjects.forEach((s: any) => subjects.add(s.subject));
+        plan.subjects.forEach((s) => subjects.add(s.subject));
       }
     });
     return Array.from(subjects).sort();
@@ -944,7 +955,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return Array.from(categories).sort().map(cat => cat.charAt(0).toUpperCase() + cat.slice(1));
   }, [studyRecords]);
 
-  const [cycleJustCompleted, setCycleJustCompleted] = useState(false);
   const { showNotification } = useNotification();
   const [stats, setStats] = useState<Stats>({
     totalCorrectQuestions: 0, totalQuestions: 0, dailyStudyTime: {}, dailySubjectStudyTime: {},
@@ -993,7 +1003,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
    * atuais são um array achatado. A leitura aceita os dois.
    */
   const applyCycleData = useCallback((cycleData: StudyCycleData) => {
-    const rawCycle = cycleData.studyCycle as any;
+    // `StudyCycleData` declara o formato de hoje (array). O `as` é o que
+    // reconhece que uma linha antiga ainda pode trazer `{ groupA, groupB }`.
+    const rawCycle = cycleData.studyCycle as StudySession[] | LegacyCycleGroups | null;
     if (rawCycle && !Array.isArray(rawCycle) && (rawCycle.groupA || rawCycle.groupB)) {
       setStudyCycle([...(rawCycle.groupA || []), ...(rawCycle.groupB || [])]);
     } else {
@@ -1107,7 +1119,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     async function updateStats() {
       if (studyPlans.length > 0 && availablePlanIds.length > 0 && selectedPlanId) {
-        const newStats = await calculateStats(studyRecords, selectedPlanId, activeFilters, studyPlans, availablePlanIds, consistencyOffset, studyDays, studyCycle);
+        const newStats = await calculateStats(studyRecords, selectedPlanId, activeFilters, studyPlans, availablePlanIds, consistencyOffset, studyDays);
         setStats(newStats);
       }
     }
@@ -1406,7 +1418,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // Pega o tópico de maior pontuação para a matéria atual
-        const bestTopic = subjectTopics.shift()!; // Remove o primeiro elemento
+        // Desenfileira o tópico de maior pontuação. O valor não é lido: o que
+        // importa aqui é o efeito colateral de tirá-lo da fila.
+        subjectTopics.shift();
         const subjectData = subjectDataMap.get(currentSubjectId);
 
         if (!subjectData) {
@@ -1447,14 +1461,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return cycle;
   };
 
-  const generateStudyCycle = useCallback((settings: {
-    studyHours: number;
-    minSession: number;
-    maxSession: number;
-    subjectSettings: any;
-    subjects: any[];
-    weeklyQuestionsGoal: string;
-  }) => {
+  const generateStudyCycle = useCallback((settings: GenerateCycleSettings) => {
     const finalCycle = generateStudyCycleLogic(settings);
     setStudyCycle(finalCycle);
     // Reset explícito para garantir que o novo ciclo comece do zero.
@@ -1547,7 +1554,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const newPlans = [...prevPlans];
       const planToUpdate = JSON.parse(JSON.stringify(newPlans[planIndex]));
 
-      const subjectIndex = planToUpdate.subjects.findIndex((s:any) => s.id === subjectId);
+      const subjectIndex = planToUpdate.subjects.findIndex((s: EditalSubject) => s.id === subjectId);
       if (subjectIndex === -1) return prevPlans;
       
       const findAndApplyWeight = (topics: EditalTopic[]) => {
@@ -1634,7 +1641,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           // 1. Atualiza studyPlans
           const updatedStudyPlans = [...studyPlans];
           const planToUpdate = { ...updatedStudyPlans[planIndex] };
-          planToUpdate.subjects = planToUpdate.subjects.map((s: any) => 
+          planToUpdate.subjects = planToUpdate.subjects.map((s) => 
             s.id === subjectId ? { ...s, subject: newName } : s
           );
           updatedStudyPlans[planIndex] = planToUpdate;
@@ -1692,7 +1699,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     currentProgressMinutes, studyHours, weeklyQuestionsGoal, studyDays, reminderNotes,
   ]);
 
-  const importAllData = useCallback(async (data: any) => {
+  const importAllData = useCallback(async (data: BackupData) => {
     if (!data || !data.plans) {
       throw new Error('Arquivo de backup inválido ou incompatível.');
     }

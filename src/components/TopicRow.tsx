@@ -1,8 +1,5 @@
 import React, { useState, Fragment, useEffect } from 'react';
-import {
-  BsCheckLg, BsXLg, BsPlusCircleFill,
-  BsChevronUp, BsChevronDown, BsTrashFill, BsGraphUp
-} from 'react-icons/bs';
+import { BsPlusCircleFill, BsChevronUp, BsChevronDown, BsTrashFill, BsGraphUp } from 'react-icons/bs';
 import { StudyRecord, EditalTopic as Topic } from '../context/DataContext';
 
 interface TopicRowProps {

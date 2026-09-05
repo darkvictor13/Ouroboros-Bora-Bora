@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FaPlus, FaFileAlt } from 'react-icons/fa';
-import PlanSelector from '../../components/PlanSelector';
+import { FaPlus } from 'react-icons/fa';
 import AddSimuladoModal from '../../components/AddSimuladoModal';
 import SimuladoCard from '../../components/SimuladoCard';
 import SimuladoLineChart from '../../components/SimuladoLineChart';

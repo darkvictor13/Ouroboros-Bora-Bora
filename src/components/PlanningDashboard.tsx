@@ -2,18 +2,22 @@
 
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { useNotification } from '../context/NotificationContext';
 import DonutChart from './DonutChart';
 import StudySessionList from './StudySessionList';
-import AddSessionModal from './AddSessionModal'; // Import the new modal
 
 interface PlanningDashboardProps {
   onOpenModal: () => void;
 }
 
 const PlanningDashboard: React.FC<PlanningDashboardProps> = ({ onOpenModal }) => {
-  const { studyCycle, selectedPlanId, setSelectedPlanId, setStudyCycle, stats, completedCycles, currentProgressMinutes, sessionProgressMap } = useData();
-  const { showNotification } = useNotification();
+  const {
+    studyCycle,
+    setStudyCycle,
+    stats,
+    completedCycles,
+    currentProgressMinutes,
+    sessionProgressMap,
+  } = useData();
 
   // Índice da sessão sob o cursor — o DonutChart usa como `cycle[hoveredSession]`.
   const [hoveredSession, setHoveredSession] = useState<number | null>(null);
@@ -22,7 +26,6 @@ const PlanningDashboard: React.FC<PlanningDashboardProps> = ({ onOpenModal }) =>
     onOpenModal();
   };
 
-  const totalCycleDuration = studyCycle?.reduce((sum, session) => sum + session.duration, 0) || 1;
   const weeklyProgressPercent = stats.weeklyHours > 0 ? (currentProgressMinutes / (stats.weeklyHours * 60)) * 100 : 0;
 
   const handleResetCycle = () => {

@@ -31,7 +31,7 @@ interface DailyStudySectionProps {
   className?: string;
 }
 
-const DailyStudySection = ({ dailySubjectStudyTime, subjectColors, className }: DailyStudySectionProps) => {
+const DailyStudySection = ({ dailySubjectStudyTime, subjectColors }: DailyStudySectionProps) => {
   const [currentDate, setCurrentDate] = useState('');
 
   useEffect(() => {

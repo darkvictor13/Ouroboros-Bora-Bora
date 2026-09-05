@@ -67,11 +67,16 @@ export default function AddSimuladoModal({ isOpen, onClose, initialSimulado }: A
     }
   }, [isOpen, initialSimulado, studyPlans]);
 
+  /** Só os campos numéricos da linha passam por aqui — o nome tem caminho próprio. */
+  type CampoNumerico = {
+    [K in keyof Subject]: Subject[K] extends number ? K : never;
+  }[keyof Subject];
+
   const handleSubjectChange = (index: number, field: keyof Subject, value: string) => {
     const newSubjects = [...subjects];
     const numericValue = parseInt(value, 10);
     if (typeof newSubjects[index][field] === 'number') {
-      (newSubjects[index] as any)[field] = isNaN(numericValue) ? 0 : numericValue;
+      newSubjects[index][field as CampoNumerico] = isNaN(numericValue) ? 0 : numericValue;
     }
     setSubjects(newSubjects);
   };

@@ -13,11 +13,11 @@ O Ouroboros é uma aplicação completa para planejamento de estudos, projetada 
 - [🏁 Como Começar](#-como-começar)
   - [Pré-requisitos](#pré-requisitos)
   - [Instalação](#instalação)
+  - [Configurando o Supabase](#configurando-o-supabase)
   - [Executando a Aplicação](#executando-a-aplicação)
     - [Modo de Desenvolvimento](#modo-de-desenvolvimento)
+    - [Build de Produção](#build-de-produção)
     - [Modo de Produção com Docker](#modo-de-produção-com-docker)
-    - [Executando com Imagem Pré-construída do Docker Hub](#executando-com-imagem-pré-construída-do-docker-hub)
-    - [Construindo e Executando a Versão Desktop (Electron)](#construindo-e-executando-a-versão-desktop-electron)
 - [🤝 Contribuição](#-contribuição)
 - [📄 Licença](#-licença)
 - [📞 Contato](#-contato)
@@ -32,11 +32,16 @@ Confira também o tutorial completo para aprender a usar todas as ferramentas:
 
 **[➡️ Tutorial Completo no YouTube](https://youtu.be/vAGiZICjqSM)**
 
-## 📥 Download
+## 📥 Acesso
 
-A versão mais recente da aplicação para desktop (Windows e Linux) pode ser baixada aqui:
+O Ouroboros é uma aplicação web: basta abrir no navegador, sem instalar nada.
 
-**[➡️ Baixar Ouroboros v1.1.3](https://github.com/grebsu/Ouroboros/releases/tag/v1.1.3)**
+> **Nota sobre a v1:** até a v1.1.3 havia também um aplicativo de desktop, em
+> Electron. A v2 descontinuou o desktop — o app virou uma SPA estática que fala
+> com o Supabase direto do navegador, e é a mesma em qualquer dispositivo. Os
+> instaladores antigos continuam nas
+> [releases](https://github.com/grebsu/Ouroboros/releases), mas guardam os dados
+> em arquivos locais e não conversam com a versão nova.
 
 ## 💖 Apoie o Projeto
 
@@ -72,6 +77,8 @@ Muito obrigado pelo seu apoio!
 - **Visualização de Dados:** [Chart.js](https://www.chartjs.org/)
 - **Drag & Drop:** [dnd-kit](https://dndkit.com/)
 - **Gerenciamento de Datas:** [date-fns](https://date-fns.org/)
+- **Backend:** [Supabase](https://supabase.com/) (Postgres, Auth e Storage, com Row Level Security)
+- **Testes de ponta a ponta:** [Playwright](https://playwright.dev/)
 - **Containerização:** [Docker](https://www.docker.com/)
 
 ## 🏁 Como Começar
@@ -82,7 +89,8 @@ Siga estas instruções para obter uma cópia do projeto e executá-lo em sua m�
 
 - [Node.js](https://nodejs.org/en/) (versão 20.x ou superior recomendada)
 - [npm](https://www.npmjs.com/)
-- [Docker](https://www.docker.com/get-started) e [Docker Compose](https://docs.docker.com/compose/install/)
+- [Docker](https://www.docker.com/get-started) e [Docker Compose](https://docs.docker.com/compose/install/) — opcional, só para rodar em contêiner
+- [Supabase CLI](https://supabase.com/docs/guides/cli) — opcional, para subir um banco local
 
 ### Instalação
 
@@ -99,22 +107,82 @@ Siga estas instruções para obter uma cópia do projeto e executá-lo em sua m�
    npm install
    ```
 
+### Configurando o Supabase
+
+O Ouroboros guarda os dados no [Supabase](https://supabase.com/) (Postgres + Auth,
+com Row Level Security). O app fala com ele **direto do navegador**, então tudo
+que ele precisa são duas variáveis públicas.
+
+1. Copie o modelo e preencha:
+   ```bash
+   cp .env.local.example .env.local
+   ```
+   - **Supabase local** (`npx supabase start`): os valores saem de `npx supabase status`.
+   - **Supabase hospedado:** Project Settings → API.
+
+2. Confira que ficou tudo no lugar:
+   ```bash
+   npm run setup
+   ```
+   O comando valida o `.env.local` e falha com código de saída 1 se faltar algo.
+
+> A `anon key` não é segredo: quem impede um usuário de ler os dados de outro é a
+> RLS, aplicada no banco. **Nunca** coloque a `service_role key` no `.env.local`.
+
+3. Aplique as migrations no banco:
+   ```bash
+   npx supabase db push          # banco hospedado
+   npx supabase start            # banco local (já aplica as migrations)
+   ```
+
 ### Executando a Aplicação
+
+O Ouroboros é uma SPA estática: não há servidor Node em produção. O `next build`
+gera a pasta `out/`, que é só arquivo — os dados vêm do Supabase direto do
+navegador, e quem os protege é a Row Level Security do banco.
 
 #### Modo de Desenvolvimento
 
-Para iniciar o servidor de desenvolvimento:
 ```bash
 npm run dev
 ```
-Abra [http://localhost:3000](http://localhost:3000) no seu navegador para ver o resultado.
+Abra [http://localhost:3000](http://localhost:3000) no seu navegador.
+
+#### Build de Produção
+
+Para ver o bundle estático do mesmo jeito que ele vai para o ar:
+
+```bash
+npm run start:web
+```
+
+Isso roda o `next build` (que gera `out/`) e serve a pasta em
+[http://localhost:3000](http://localhost:3000). O `serve` vai **sem** o `-s`
+de propósito: o export gera um `.html` por rota, e o `-s` mandaria tudo para o
+`index.html`, o que não é o que o Cloudflare Pages faz.
+
+#### Testes
+
+Com o Supabase local no ar (`npx supabase start`) e o app rodando:
+
+```bash
+npm run test:rls    # isolamento entre usuários, direto pela API
+npm run test:e2e    # Playwright dirigindo o app inteiro
+```
+
+O `test:e2e` usa o Chrome do sistema. Se você não tiver um, rode
+`npx playwright install chromium` e exporte `PLAYWRIGHT_CHANNEL=chromium`.
 
 #### Modo de Produção com Docker
 
 Para executar a aplicação em um contêiner Docker, garantindo um ambiente de produção consistente:
 
-1.  **Construa a imagem Docker:**
+As duas variáveis do Supabase são embutidas no bundle em tempo de **build**, então
+elas precisam estar no ambiente na hora do `build`, não do `up`:
+
+1.  **Construa a imagem:**
     ```bash
+    export $(grep -v '^#' .env.local | xargs)
     docker compose build
     ```
 
@@ -124,42 +192,6 @@ Para executar a aplicação em um contêiner Docker, garantindo um ambiente de p
     ```
     A aplicação estará disponível em [http://localhost:3000](http://localhost:3000).
 
-#### Executando com Imagem Pré-construída do Docker Hub
-
-Para executar a aplicação usando a imagem pré-construída do Docker Hub:
-
-1.  **Puxe a imagem Docker:**
-    ```bash
-    docker pull ouroboros73/ouroboros:latest
-    ```
-2.  **Execute o contêiner Docker:**
-    Certifique-se de configurar suas variáveis de ambiente (por exemplo, `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`) ao executar o contêiner. Você pode passá-las usando a flag `-e`.
-    ```bash
-    docker run -p 3000:3000 -e DATABASE_URL="your_database_url" -e NEXTAUTH_SECRET="your_nextauth_secret" -e NEXTAUTH_URL="http://localhost:3000" ouroboros73/ouroboros:latest
-    ```
-
-#### Construindo e Executando a Versão Desktop (Electron)
-
-Para construir e executar a aplicação como um aplicativo de desktop (Linux, Windows) usando Electron, siga os passos abaixo. Certifique-se de que todas as dependências gerais do projeto já foram instaladas com `npm install`.
-
-1.  **Configuração Inicial:**
-    Este comando prepara o ambiente e pode ser necessário para garantir que tudo funcione corretamente.
-    ```bash
-    npm run setup
-    ```
-
-2.  **Executar em Modo de Desenvolvimento:**
-    Para iniciar o aplicativo Electron em modo de desenvolvimento com hot-reload.
-    ```bash
-    npm run dev:electron
-    ```
-
-3.  **Construir para Produção:**
-    Para gerar os pacotes de instalação para produção (ex: `.deb`, `.AppImage` para Linux; `.exe` para Windows).
-    ```bash
-    npm run build:electron
-    ```
-    Os arquivos finais serão gerados na pasta `dist/`.
 ## 🤝 Contribuição
 
 Contribuições são muito bem-vindas! Se você tiver ideias, sugestões ou quiser reportar um bug, por favor, abra uma issue ou envie um pull request.

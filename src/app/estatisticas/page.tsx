@@ -6,13 +6,11 @@ import { BsPlusCircleFill, BsFunnel, BsArrowUp, BsArrowDown, BsChevronDown, BsCh
 import ChartComponents from '../../components/ChartComponents';
 import StudyRegisterModal from '../../components/StudyRegisterModal';
 import FilterModal from '../../components/FilterModal';
-import PlanSelector from '../../components/PlanSelector';
 import StopwatchModal from '../../components/StopwatchModal';
 import { Line, Bar } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale, BarElement, RadialLinearScale, TooltipItem } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale, BarElement, RadialLinearScale } from 'chart.js';
 import type { ChartOptions } from 'chart.js';
 import 'chartjs-adapter-date-fns';
-import ChartDataLabels from 'chartjs-plugin-datalabels';
 
 import { HierarchicalPerformanceNode, StudyRecord } from '../../context/DataContext'; // Import HierarchicalPerformanceNode
 
@@ -23,15 +21,20 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 export default function Estatisticas() {
   // `availableEditalData` nunca existiu no contexto — a tela lia `undefined` e
   // já passava `stats.editalData` para o modal de filtro.
-  const { selectedPlanId, setSelectedPlanId, availablePlanIds, stats, addStudyRecord, updateStudyRecord, applyFilters, availableSubjects, availableCategories } = useData();
+  const {
+    stats,
+    addStudyRecord,
+    updateStudyRecord,
+    applyFilters,
+    availableSubjects,
+    availableCategories,
+  } = useData();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = React.useState(false);
   const [chartJsLoaded, setChartJsLoaded] = React.useState(false);
   
   const [editingRecord, setEditingRecord] = React.useState<StudyRecord | null>(null);
   const [showStopwatchModal, setShowStopwatchModal] = React.useState(false);
-  const [stopwatchTargetDuration, setStopwatchTargetDuration] = React.useState<number | undefined>(undefined);
-  const [stopwatchModalSubject, setStopwatchModalSubject] = React.useState<string | undefined>(undefined);
   const [allTopicsExpanded, setAllTopicsExpanded] = React.useState(true);
   const [subjectSortOrder, setSubjectSortOrder] = React.useState('desc'); // 'desc', 'asc', 'alpha'
 
@@ -47,10 +50,6 @@ export default function Estatisticas() {
     return entries;
   }, [stats.subjectStudyHours, subjectSortOrder]);
 
-  const openStopwatchModal = () => {
-    setStopwatchModalSubject(''); // Define um valor padrão
-    setShowStopwatchModal(true);
-  };
   const closeStopwatchModal = () => setShowStopwatchModal(false);
 
   const getLocalYYYYMMDD = () => {
@@ -632,8 +631,6 @@ export default function Estatisticas() {
         setShowStopwatchModal(false);
         setIsModalOpen(true);
       }}
-      targetDuration={stopwatchTargetDuration}
-      subject={stopwatchModalSubject}
     />
     </>
   );

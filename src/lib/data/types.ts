@@ -117,13 +117,34 @@ export interface PlanData {
 /** Campos que o app pode criar ou alterar num plano. */
 export type PlanInput = Partial<Omit<PlanData, 'id'>> & { name: string };
 
+/**
+ * Uma sessão do ciclo de estudos. Mora aqui, e não no `DataContext`, porque
+ * `StudyCycleData` a contém e a camada de dados não pode depender da UI.
+ */
+export interface StudySession {
+  id: string;
+  /** ID da matéria no plano. */
+  subjectId: string;
+  /** Nome da matéria, mantido para exibição sem precisar resolver o ID. */
+  subject: string;
+  duration: number;
+  color: string;
+}
+
+/** Um lembrete do painel de planejamento. */
+export interface ReminderNote {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 export interface StudyCycleData {
-  studyCycle: any[] | null;
+  studyCycle: StudySession[] | null;
   studyHours: string;
   weeklyQuestionsGoal: string;
   currentProgressMinutes: number;
   sessionProgressMap: { [key: string]: number };
-  reminderNotes: any[];
+  reminderNotes: ReminderNote[];
   studyDays: string[];
   completedCycles: number;
   cycleGenerationTimestamp: number | null;
@@ -140,9 +161,52 @@ export interface MutationResult {
  * Supabase; a restauração também aceita os formatos da v1, que eram listas de
  * arquivos JSON.
  */
+// Os tipos abaixo descrevem o que pode vir DE FORA — um arquivo que o usuário
+// escolheu. Tudo é opcional de propósito: a v1 gravou formatos diferentes ao
+// longo do tempo (plano como array puro de matérias, matéria sem `id`, matéria
+// de simulado como `subjectName`). Declarar isso é o que permite à restauração
+// tolerar o formato antigo sem apagar a checagem de tipo do resto.
+
+export type BackupStudyRecord = Partial<StudyRecord> & { id: string };
+export type BackupReviewRecord = Partial<ReviewRecord> & { studyRecordId: string };
+export type BackupSimuladoSubject = Partial<SimuladoSubject> & { subjectName?: string };
+export type BackupSimuladoRecord = Partial<Omit<SimuladoRecord, 'subjects'>> & {
+  subjects?: BackupSimuladoSubject[];
+};
+
+export interface BackupPlanContent {
+  name?: string;
+  observations?: string;
+  cargo?: string;
+  edital?: string;
+  banca?: string;
+  subjects?: Partial<EditalSubject>[];
+  bancaTopicWeights?: PlanData['bancaTopicWeights'];
+  records?: BackupStudyRecord[];
+  reviewRecords?: BackupReviewRecord[];
+  simuladoRecords?: BackupSimuladoRecord[];
+}
+
+/** A v1 gravou o ciclo ora como array, ora como dois grupos nomeados. */
+export interface LegacyCycleGroups {
+  groupA?: StudySession[];
+  groupB?: StudySession[];
+}
+
+export type BackupCycleContent = Omit<Partial<StudyCycleData>, 'studyCycle'> & {
+  studyCycle?: StudySession[] | LegacyCycleGroups | null;
+};
+
+/** Estado que só o cliente conhece; viaja junto para o backup ficar completo. */
+export type BackupClientData = Partial<StudyCycleData> & {
+  version?: number;
+  selectedPlanId?: string | null;
+};
+
 export interface BackupData {
   version?: number;
-  plans: { fileName?: string; content: any }[];
-  cycles?: { fileName?: string; planName?: string; content: any }[];
-  clientData?: any;
+  /** `content` pode ser o array puro de matérias, como a v1 gravava. */
+  plans: { fileName?: string; content: BackupPlanContent | Partial<EditalSubject>[] }[];
+  cycles?: { fileName?: string; planName?: string; content: BackupCycleContent }[];
+  clientData?: BackupClientData;
 }

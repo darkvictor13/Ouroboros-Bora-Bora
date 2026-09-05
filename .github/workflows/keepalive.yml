@@ -1,0 +1,25 @@
+name: Keepalive do Supabase
+
+# O plano Free do Supabase pausa projetos sem atividade (hoje, ~7 dias). Um
+# projeto pausado volta com intervenção manual no dashboard — e o app fica fora
+# do ar até alguém perceber. Um `select 1` a cada 3 dias resolve.
+#
+# ⚠️ O GitHub desativa workflows agendados em repositório sem commits por 60
+# dias, e manda um e-mail antes. Se este workflow parar de rodar, é isso.
+on:
+  schedule:
+    - cron: '17 6 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: select 1
+    runs-on: ubuntu-latest
+    steps:
+      # `psql` já vem na imagem do runner.
+      # SUPABASE_DB_URL: a connection string do pooler, em
+      # Project Settings → Database → Connection string → URI.
+      - name: Consultar o banco
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c 'select 1;'

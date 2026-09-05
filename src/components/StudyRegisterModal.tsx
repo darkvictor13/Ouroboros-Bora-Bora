@@ -10,7 +10,7 @@ import AddSubjectModal from './AddSubjectModal';
 import { FaInfoCircle } from 'react-icons/fa';
 
 // --- INTERFACES HIERÁRQUICAS ATUALIZADAS ---
-interface Topic extends EditalTopic {}
+type Topic = EditalTopic;
 
 interface Subject {
   id: string;
@@ -64,7 +64,8 @@ const JustificationDetails: React.FC<{ justification: string }> = ({ justificati
     }
     const hasStudied = !details.some(d => d.name === 'Frequência' && d.value === '0x');
     details = details.map(detail => {
-        let { name, value } = detail;
+        const { name } = detail;
+        let { value } = detail;
         if (name === 'Frequência') value = value === '0x' ? 'Nenhuma vez' : value.replace('x', ' vezes');
         if (name === 'Último Estudo') value = value.includes('999d') ? 'Nunca estudado' : value.replace('d', ' dias atrás');
         if (name === 'Taxa de Acertos' && !hasStudied) value = 'Sem histórico';

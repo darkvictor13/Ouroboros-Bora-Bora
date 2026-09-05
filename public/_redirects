@@ -1,0 +1,11 @@
+# Roteamento no Cloudflare Pages.
+#
+# O `output: 'export'` gera um .html por rota (planos.html, login.html, ...) e o
+# Pages serve esse arquivo direto — esta regra NÃO passa por cima dele. Ela só
+# pega o que sobrou: uma URL que não corresponde a nenhum arquivo. Sem ela, isso
+# seria um 404 do servidor em vez de a SPA decidir o que mostrar.
+#
+# É por isso que o `npm run start:web` serve `out/` SEM o `-s` do `serve`: com
+# `-s`, tudo cai no index.html e cada rota perde o seu HTML, que não é o que
+# acontece em produção.
+/*  /index.html  200

@@ -1,18 +1,9 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { Radar } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  RadialLinearScale,
-  PointElement,
-  LineElement,
-  Filler,
-  Tooltip,
-  Legend,
-  Title,
-  Chart
-} from 'chart.js';
+import type { TooltipItem } from 'chart.js';
+import { RadialLinearScale, Chart } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 
 
@@ -180,14 +171,14 @@ const CategoryHoursChart: React.FC<CategoryHoursChartProps> = ({ categoryStudyHo
         titleFont: { size: 14, weight: 'bold' as const },
         bodyFont: { size: 12 },
         callbacks: {
-          label: (context: any) => formatTimeLabel(context.raw as number),
+          label: (context: TooltipItem<'radar'>) => formatTimeLabel(context.raw as number),
         },
       },
       datalabels: {
         display: true,
         formatter: (value: number) => formatTimeLabel(value),
         color: '#4B5563',
-        backgroundColor: (context: any) => {
+        backgroundColor: () => {
           const isDarkMode = document.documentElement.classList.contains('dark');
           return isDarkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.7)';
         },
@@ -203,7 +194,7 @@ const CategoryHoursChart: React.FC<CategoryHoursChartProps> = ({ categoryStudyHo
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-        <Radar data={chartData} options={chartOptions as any} plugins={[curvedPointLabelsPlugin, ChartDataLabels]} />
+        <Radar data={chartData} options={chartOptions} plugins={[curvedPointLabelsPlugin, ChartDataLabels]} />
     </div>
   );
 };

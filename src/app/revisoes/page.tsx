@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useData, StudyRecord, ReviewRecord } from '../../context/DataContext';
 import { BsPlusCircleFill, BsPlayFill, BsCheckCircleFill, BsXCircleFill, BsClockFill, BsBookFill, BsCameraVideoFill, BsChatTextFill } from 'react-icons/bs';
-import PlanSelector from '../../components/PlanSelector';
 import StudyRegisterModal from '../../components/StudyRegisterModal';
 
 // Category display map for FilterModal
@@ -37,7 +36,13 @@ const formatTime = (ms: number): string => {
 };
 
 export default function Revisao() {
-  const { selectedPlanId, setSelectedPlanId, availablePlanIds, addStudyRecord, updateStudyRecord, studyRecords, reviewRecords, updateReviewRecord } = useData();
+  const {
+    addStudyRecord,
+    updateStudyRecord,
+    studyRecords,
+    reviewRecords,
+    updateReviewRecord,
+  } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<StudyRecord | null>(null);
   const [activeTab, setActiveTab] = useState<'scheduled' | 'overdue' | 'ignored' | 'completed'>('scheduled');

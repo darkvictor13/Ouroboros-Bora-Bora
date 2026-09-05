@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { Suspense, useState, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext'; // Use useData
 import { createPlan } from '@/lib/data';
@@ -9,8 +10,8 @@ import CreatePlanModal from '../../components/CreatePlanModal';
 import { FaPlusCircle, FaFileAlt, FaTrash } from 'react-icons/fa';
 import { useNotification } from '../../context/NotificationContext';
 import ConfirmationModal from '../../components/ConfirmationModal';
-import ImportGuideForm from '../../components/ImportGuideForm';
 import WelcomeScreen from '../../components/WelcomeScreen';
+import PlanDetail from '../../components/PlanDetail';
 
 // Interfaces (keep as is)
 interface Topic {
@@ -27,7 +28,7 @@ interface PlanInfo {
   banca?: string;
 }
 
-export default function Planos() {
+function PlanList() {
   const { status } = useAuth();
   const { deletePlan, studyPlans, loading: dataContextLoading, refreshPlans } = useData();
   const { showNotification } = useNotification();
@@ -131,11 +132,10 @@ export default function Planos() {
               </header>
               <hr className="mt-2 mb-6 border-gray-300 dark:border-gray-700" />
             </div>
-            <ImportGuideForm />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {plansToDisplay.map((plan) => (
                 <div key={plan.id} className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col items-center text-center p-6 group">
-                  <Link href={`/planos/${plan.id}`} className="w-full h-full">
+                  <Link href={`/planos?id=${plan.id}`} className="w-full h-full">
                     {plan.iconUrl ? (
                       <div className="relative w-24 h-24 mb-4 rounded-full overflow-hidden border-4 border-amber-500 shadow-md mx-auto">
                         {/* `<img>` e não `next/image`: a URL do ícone é assinada
@@ -185,4 +185,27 @@ export default function Planos() {
   }
 
   return null;
+}
+
+/**
+ * `/planos` mostra a lista; `/planos?id=<uuid>`, o detalhe de um plano.
+ *
+ * Era uma rota `[planId]` até a Fase 5. Sob `output: 'export'` o Next exige
+ * `generateStaticParams` para gerar cada caminho dinâmico em build — o que é
+ * impossível quando o parâmetro é um uuid de dado do usuário. A query string
+ * não faz parte do caminho, então uma página só cobre os dois casos.
+ */
+function PlanosRouter() {
+  const planId = useSearchParams().get('id');
+  return planId ? <PlanDetail planId={planId} /> : <PlanList />;
+}
+
+export default function PlanosPage() {
+  // `useSearchParams` obriga um limite de Suspense: sem ele o Next se recusa a
+  // pré-renderizar a página no export.
+  return (
+    <Suspense fallback={null}>
+      <PlanosRouter />
+    </Suspense>
+  );
 }

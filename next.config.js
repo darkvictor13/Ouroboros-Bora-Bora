@@ -1,21 +1,24 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    // Desativa o Turbopack explicitamente
-    // Isso é necessário para resolver problemas de compatibilidade com certas bibliotecas
-    // como chart.js e react-chartjs-2, que podem não ser totalmente compatíveis com o Turbopack ainda.
-    // Se você precisar do Turbopack no futuro, pode remover esta linha.
-  },
+  // Fase 5: o app virou SPA estática. Não há mais nada de servidor no caminho —
+  // os dados vêm do Supabase direto do browser e quem os protege é a RLS — então
+  // `next build` gera `out/`, que o Cloudflare Pages publica como arquivo.
+  // Consequências já absorvidas no código: nenhuma rota `[param]` (viraram query
+  // string), nenhum route handler e nenhum `redirect()` de Server Component.
+  output: 'export',
+
   images: {
-    domains: ['cdn.tecconcursos.com.br'],
+    // O otimizador de imagem do Next é um serviço: ele exige o servidor que
+    // acabou de sair. `next/image` continua em uso (CreatePlanModal), só que
+    // servindo o arquivo original.
+    unoptimized: true,
   },
+
   transpilePackages: ['uuid'],
   eslint: {
-    // Continua ligado: são ~200 violações pré-existentes (a maioria
-    // `no-unused-vars` e `no-explicit-any`), e o `next lint` nunca chegou a
-    // rodar neste repositório — a limpeza é um trabalho à parte, registrado na
-    // Fase 6. O CI roda o ESLint como passo próprio.
-    ignoreDuringBuilds: true,
+    // A dívida de lint foi zerada na Fase 6; o build volta a reprovar de
+    // verdade se alguém reintroduzir uma violação.
+    ignoreDuringBuilds: false,
   },
   typescript: {
     // Desligado na Fase 3: num refactor deste tamanho o compilador é o teste de

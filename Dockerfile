@@ -1,23 +1,31 @@
-# Use a imagem oficial do Node.js como base
-FROM node:20-slim
+# O Ouroboros é uma SPA estática: o `next build` gera `out/`, e servir isso não
+# precisa de Node em runtime. A imagem é em dois estágios para que o resultado
+# carregue só os arquivos e o servidor estático, não o node_modules do build.
 
-# Define o diretório de trabalho dentro do contêiner
+FROM node:20-slim AS build
 WORKDIR /app
 
-# Copia os arquivos de manifesto do pacote e instala as dependências
-# O uso de wildcards garante que tanto package.json quanto package-lock.json (ou yarn.lock) sejam copiados.
 COPY package*.json ./
-COPY setup-env.js ./
-RUN npm install
+RUN npm ci
 
-# Copia o restante dos arquivos da aplicação
 COPY . .
 
-# Constrói a aplicação Next.js
+# As duas variáveis são `NEXT_PUBLIC_`: elas são embutidas no bundle em tempo de
+# BUILD, então precisam estar aqui e não no `docker run`. Não são segredo — quem
+# protege os dados é a RLS do Supabase.
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+
 RUN npm run build
 
-# Expõe a porta em que a aplicação Next.js será executada
-EXPOSE 3000
+FROM node:20-slim
+WORKDIR /app
+RUN npm install -g serve@14
+COPY --from=build /app/out ./out
 
-# Define o comando para iniciar a aplicação
-CMD ["npm", "start"]
+EXPOSE 3000
+# `-s` faz o fallback de SPA (toda rota cai no index.html), o mesmo papel do
+# public/_redirects no Cloudflare Pages.
+CMD ["serve", "out", "-s", "-l", "3000"]

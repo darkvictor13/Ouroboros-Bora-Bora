@@ -1,19 +1,12 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useData, StudyRecord } from '../../context/DataContext';
 import { BsPlusCircleFill, BsFunnel, BsPencilSquare, BsTrash } from 'react-icons/bs';
 import StudyRegisterModal from '../../components/StudyRegisterModal';
 import FilterModal from '../../components/FilterModal';
-import PlanSelector from '../../components/PlanSelector';
 import ConfirmationModal from '../../components/ConfirmationModal'; // Importando o novo modal
 
-interface StudySession {
-  id: string;
-  subject: string;
-  duration: number;
-  color: string;
-}
 
 // Helper para formatar o tempo de milissegundos para HH:MM:SS
 const formatTime = (ms: number) => {
@@ -33,12 +26,7 @@ const categoryDisplayMap: { [key: string]: string } = {
   jurisprudencia: 'Jurisprudência',
 };
 
-interface Filters {
-  subject: string;
-  category: string;
-  startDate: string;
-  endDate: string;
-}
+import type { Filters } from '@/context/DataContext';
 
 const HistoricoPage = () => {
   // Acessando dados e funções do context
@@ -47,10 +35,8 @@ const HistoricoPage = () => {
     addStudyRecord,
     updateStudyRecord,
     deleteStudyRecord,
-    availablePlanIds,
-    selectedPlanId,
-    setSelectedPlanId,
-    studyPlans, // Adicionado para acessar as cores
+    studyPlans,
+    // Adicionado para acessar as cores
     stats,
   } = useData();
 
@@ -62,12 +48,7 @@ const HistoricoPage = () => {
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null); // Estado para o ID do registro a ser excluído
 
   // Estado para os filtros
-  const [filters, setFilters] = useState<Filters>({
-    subject: '',
-    category: '',
-    startDate: '',
-    endDate: '',
-  });
+  const [filters, setFilters] = useState<Filters>({});
 
   // Cria um mapa de matérias para cores para fácil acesso
   const subjectColorMap = useMemo(() => {
@@ -99,8 +80,8 @@ const HistoricoPage = () => {
 
       if (startDate && recordDate < startDate) return false;
       if (endDate && recordDate > endDate) return false;
-      if (filters.subject && record.subject !== filters.subject) return false;
-      if (filters.category && record.category !== filters.category) return false;
+      if (filters.subjects?.length && !filters.subjects.includes(record.subject)) return false;
+      if (filters.categories?.length && !filters.categories.includes(record.category)) return false;
 
       return true;
     });

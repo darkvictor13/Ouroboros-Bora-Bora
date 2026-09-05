@@ -34,7 +34,7 @@ const DeleteAllDataModal: React.FC<DeleteAllDataModalProps> = ({ isOpen, onClose
           Tem certeza absoluta que deseja apagar <strong>TODOS</strong> os seus dados? Esta ação não pode ser desfeita.
         </p>
         <p className="text-gray-600 dark:text-gray-300 mb-4">
-          Para confirmar, digite "<strong>APAGAR TUDO</strong>" no campo abaixo:
+          Para confirmar, digite &quot;<strong>APAGAR TUDO</strong>&quot; no campo abaixo:
         </p>
         <input
           type="text"

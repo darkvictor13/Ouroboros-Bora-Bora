@@ -3,14 +3,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { getPlan, updatePlan, getStudyRecords, deletePlan as deletePlanOnServer, uploadPlanIcon } from '@/lib/data';
 import type { StudyRecord } from '@/lib/data';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import AddSubjectModal from '../../../components/AddSubjectModal';
-import AddTopicModal from '../../../components/AddTopicModal';
-import CreatePlanModal from '../../../components/CreatePlanModal';
+import AddSubjectModal from '@/components/AddSubjectModal';
+import CreatePlanModal from '@/components/CreatePlanModal';
 import { FaPlusCircle, FaEdit, FaTrash, FaCamera, FaEye } from 'react-icons/fa';
-import { useNotification } from '../../../context/NotificationContext';
-import ConfirmationModal from '../../../components/ConfirmationModal';
+import { useNotification } from '@/context/NotificationContext';
+import ConfirmationModal from '@/components/ConfirmationModal';
 
 import type { EditalSubject as Subject, EditalTopic as Topic } from '@/lib/data';
 import type { PlanData } from '@/lib/data';
@@ -50,9 +49,12 @@ const countStudiedTopicsRecursively = (topics: Topic[], studiedTopicTexts: Set<s
   return count;
 };
 
-export default function PlanoDetalhes() {
-  const params = useParams();
-  const planId = params.planId as string;
+/**
+ * Detalhe de um plano. Vive em `/planos?id=<uuid>` — sob `output: 'export'`
+ * uma rota `[planId]` exigiria `generateStaticParams`, impossível para dado de
+ * usuário. Quem lê o parâmetro e monta este componente é `src/app/planos/page.tsx`.
+ */
+export default function PlanDetail({ planId }: { planId: string }) {
   const router = useRouter();
   const { showNotification } = useNotification();
   
@@ -62,13 +64,10 @@ export default function PlanoDetalhes() {
   
   // Estados dos modais
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
-  const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
-  const [selectedSubjectIndex, setSelectedSubjectIndex] = useState<number | null>(null); // Novo estado para o índice da matéria selecionada
   const [hoveredSubjectIndex, setHoveredSubjectIndex] = useState<number | null>(null); // Novo estado para hover
   const [subjectToEdit, setSubjectToEdit] = useState<Subject | null>(null); // Novo estado para a matéria a ser editada
   const [isEditPlanModalOpen, setIsEditPlanModalOpen] = useState(false); // Estado para o modal de edição do plano
   const [planToEdit, setPlanToEdit] = useState<PlanData | null>(null); // Estado para os dados do plano a ser editado
-  const [hasChanges, setHasChanges] = useState(false); // Novo estado para controlar alterações
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<PlanData | null>(null);
 
@@ -112,7 +111,7 @@ export default function PlanoDetalhes() {
         .filter(record => record.subject === subject.subject)
         .map(record => record.topic)
       );
-      let studiedTopics = countStudiedTopicsRecursively(subject.topics || [], studiedTopicTexts);
+      const studiedTopics = countStudiedTopicsRecursively(subject.topics || [], studiedTopicTexts);
       let totalQuestions = 0;
 
       // Questões resolvidas
@@ -148,7 +147,6 @@ export default function PlanoDetalhes() {
       }
     }
     setLoading(false);
-    setHasChanges(false);
   }, [planId]);
 
   useEffect(() => {
@@ -198,7 +196,6 @@ export default function PlanoDetalhes() {
     };
 
     setPlanData(updatedPlanData);
-    setHasChanges(true);
     setIsSubjectModalOpen(false);
     setSubjectToEdit(null); // Limpa o estado de edição
 
@@ -207,20 +204,6 @@ export default function PlanoDetalhes() {
       showNotification(successMessage, 'success');
     } else {
       showNotification(`Erro ao salvar a disciplina: ${result.error}`, 'error');
-    }
-  };
-
-  const handleAddTopics = (newTopics: Topic[], shouldContinue: boolean) => {
-    if (!planData || selectedSubjectIndex === null) return;
-
-    // Simplesmente anexa a nova estrutura de tópicos à lista existente
-    const updatedSubjects = [...planData.subjects];
-    updatedSubjects[selectedSubjectIndex].topics.push(...newTopics);
-
-    setPlanData({ ...planData, subjects: updatedSubjects });
-    setHasChanges(true);
-    if (!shouldContinue) {
-      setIsTopicModalOpen(false);
     }
   };
 
@@ -272,8 +255,7 @@ export default function PlanoDetalhes() {
       const updatedSubjects = planData.subjects.filter(s => s.subject !== subjectToDelete.subject);
       const updatedPlanData = { ...planData, subjects: updatedSubjects };
       setPlanData(updatedPlanData);
-      setHasChanges(true);
-
+  
       const result = await updatePlan(planId, updatedPlanData);
       if (result.success) {
         showNotification('Disciplina excluída com sucesso!', 'success');
@@ -455,7 +437,7 @@ export default function PlanoDetalhes() {
                     style={{ backgroundColor: `${subject.color}E6` }} // Usar a cor da disciplina com 90% de opacidade
                   >
                     <button
-                      onClick={() => router.push(`/materias/${encodeURIComponent(subject.subject)}?plan=${planId}${planData.banca ? `&banca=${encodeURIComponent(planData.banca)}` : ''}`)}
+                      onClick={() => router.push(`/materias?nome=${encodeURIComponent(subject.subject)}&plan=${planId}${planData.banca ? `&banca=${encodeURIComponent(planData.banca)}` : ''}`)}
                       className="bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 p-3 rounded-full hover:bg-gray-200 transition-colors shadow-md"
                       title="Visualizar"
                     >

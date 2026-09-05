@@ -3,9 +3,10 @@
 ## Objetivos originais
 
 - [x] Utilizar Supabase para armazenar os dados → **Fases 1–3** — feito; nenhum acesso a `fs` sobrou no app.
-- [ ] Garantir que todas as tabelas do Supabase tenham RLS → **Fase 1**
-- [x] Ter um comando para rodar apenas a interface, sem Electron → **Fase 5** — `npm ci --omit=optional`
-      + `npm run dev:web`. Falta só o `output: 'export'`, que espera a Fase 3.
+- [x] Garantir que todas as tabelas do Supabase tenham RLS → **Fase 1** — 7/7 tabelas, confirmado
+      por `supabase db advisors --type security` e pelo `npm run test:rls`.
+- [x] Ter um comando para rodar apenas a interface, sem Electron → **Fase 5** — `npm run dev:web` /
+      `npm run start:web`. Com o Electron removido (ver 0.4), *toda* instalação é só a interface.
 - [ ] Ter automações no GitHub para migrations no Supabase e deploy → **Fase 6** — workflows escritos,
       nenhum rodou ainda (faltam os secrets; ver a tabela na Fase 6).
 
@@ -51,10 +52,29 @@ de segurança dos dados** — o que já vale hoje, desde que a Fase 3 tirou o `f
       A lista real chega por `GET /api/caderno-guia/listar-pelo-guia/<idGuia>`, que responde
       **403 Forbidden** fora de uma sessão de browser. Logo `fetch` + `cheerio` **não** resolve,
       e a Edge Function está descartada.
+      ⚠️ **Revogada pela 0.4** — sem desktop, não há onde rodar o Chrome, e a importação de guia
+      saiu do produto. O texto abaixo fica como registro do porquê ela não pôde ir para a web.
       → Manter a importação **só no desktop** (o Electron já embarca o Chrome); a web aceita
       upload do JSON. Alternativas para a web avaliadas em
       "Backlog — Extensão de browser" (adiado, não implementar agora). Consequência: `puppeteer` **não** pode ir para `optionalDependencies`
       junto com o resto na Fase 5 — ele é dependência real do build desktop.
+- [x] **0.4 — Remover o Electron por completo.** → **Decidido pelo dono do projeto** (2026-09-05),
+      depois que a Fase 5 fechou: *"pode apagar tudo que tem de electron, não vamos usar. quero
+      funcional apenas o frontend SPA"*. Isso revoga a 0.2 e a 0.3.
+      O que saiu: `electron/` (main, preload, importador de guia), `build/` (ícones do
+      electron-builder), `.puppeteerrc.cjs`, a chave `build` e os scripts `*:electron` do
+      `package.json`, e as dependências `electron`, `electron-builder`, `concurrently`, `wait-on`,
+      `rimraf` e **`puppeteer`** — este último só existia por causa da decisão 0.2.
+      O que precisou ser **reescrito**, e não apagado:
+  - **O cronômetro.** O relógio vivia no processo main (`setInterval` + `timer-tick` por IPC), e no
+    browser ele simplesmente não andava — apertar play não movia o mostrador. Virou
+    `src/lib/stopwatch.ts`: estado de módulo (sobrevive a fechar o modal, como o processo separado
+    fazia) e decorrido calculado por `Date.now()` em vez de somar ticks, porque aba em segundo
+    plano tem `setInterval` estrangulado.
+  - **A cor da barra de título** (`updateTitlebarColor`) e a faixa `draggable-region` do layout:
+    não existem fora de uma janela nativa.
+      **Perda assumida:** a importação de guia do Tec Concursos deixou de existir. Não há
+      substituto na web (ver 0.2); o caminho que resta é o backup em JSON.
 - [x] **0.3 — Aceitar que o Electron vira cliente online.** → **Aceito** (2026-09-05). Hoje o desktop
       funciona offline. Com Supabase, não. A alternativa — manter o adapter de arquivo como provider
       paralelo — foi descartada: dobraria a Fase 3, que já é a mais cara, e abriria sincronização.
@@ -282,7 +302,8 @@ para ele; o comando é `node scripts/test-data-layer.mjs`.
 
 ### Feito
 
-- [x] Mover `electron`, `electron-builder`, `concurrently` e `wait-on` para `optionalDependencies`.
+- [x] ~~Mover `electron`, `electron-builder`, `concurrently` e `wait-on` para `optionalDependencies`.~~
+      **Superado pela 0.4:** os quatro (mais `puppeteer` e `rimraf`) foram removidos do projeto.
       **`puppeteer` ficou em `dependencies`**, pela decisão 0.2 — ele é dependência real do build
       desktop. Quem não quer o Chromium usa `PUPPETEER_SKIP_DOWNLOAD=true` na instalação.
       Verificado: `npm ci --omit=optional` remove os 4 pacotes e mais 233 transitivos, e mantém
@@ -301,7 +322,10 @@ para ele; o comando é `node scripts/test-data-layer.mjs`.
 - [x] Criar `.env.local.example` com `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` — feito na Fase 2
 - [x] README: seção "Rodando Só a Interface (Web)" + "Configurando o Supabase". O resto do README
       (tecnologias, download, Docker com `NEXTAUTH_SECRET`) continua desatualizado e é da Fase 7.
-- [x] Importador de guia portado para o processo main do Electron: `electron/guide-importer.js`
+- [x] ~~Importador de guia portado para o processo main do Electron: `electron/guide-importer.js`~~
+      **Removido pela 0.4.** Chegou a ser verificado contra o guia real do TEC antes de sair
+      (18 matérias, banca, contagem de tópicos e ícone), então o porte estava correto — o que mudou
+      foi o produto não ter mais onde rodá-lo.
       (`ipcMain.handle('import-guide')` + `importGuide` no preload). É o porte de
       `src/app/api/import-guide/route.ts`, que **precisa** morrer: route handler `POST` não sobrevive
       a `output: 'export'`. Duas melhorias em relação à rota: a versão do Chrome empacotado é
@@ -309,25 +333,25 @@ para ele; o comando é `node scripts/test-data-layer.mjs`.
       para o renderer subir no Storage, em vez de ser embutido no plano.
       ⚠️ **Não verificado** — precisa de uma importação real no Electron.
 
-### Bloqueado na Fase 3
+### Concluído em 2026-09-05
 
-- [ ] `next.config.js`: `output: 'export'` e `images: { unoptimized: true }`
-      (`next/image` é usado em `planos/page.tsx`, `planos/[planId]/page.tsx` e `CreatePlanModal.tsx`;
-      o otimizador exige servidor). O arquivo é da Fase 3 até ela desligar os dois `ignore`.
-- [ ] `src/app/page.tsx`: o `redirect()` é de Server Component e quebra no export → virar redirect
-      client-side ou a própria tela inicial
-- [ ] Converter as rotas dinâmicas em query string (`output: 'export'` exigiria `generateStaticParams`,
-      impossível para dados de usuário). Ambas já usam `useParams()`, então são 3 linhas de navegação:
-  - [ ] `src/app/planos/page.tsx` → `/planos?id=<uuid>`
-  - [ ] `src/app/materias/page.tsx` → `/materias?nome=<x>`
-  - [ ] `src/app/planos/[planId]/page.tsx`
-  - [ ] (a página de matérias **já lê** `useSearchParams` — o padrão está no próprio código)
-- [ ] Trocar o `fetch('/api/import-guide')` do `ImportGuideForm` pelo `window.electronAPI.importGuide`,
-      esconder o formulário quando ele não existir (web) e deletar
-      `src/app/api/import-guide/route.ts`
-- [ ] Deletar `src/lib/supabase/server.ts`. O TODO da Fase 2 dizia "remover na Fase 3", mas o único
-      uso que sobrou é a rota de import — então ele cai junto com ela, aqui.
-- [ ] Rodar `npm run start:web` e conferir o app inteiro servido de `out/`, sem servidor Node
+- [x] `next.config.js`: `output: 'export'` e `images: { unoptimized: true }`. O `next build` agora
+      lista as 14 rotas como `○ (Static)` — nenhuma `ƒ` sobrou.
+- [x] `src/app/page.tsx`: o `redirect()` de Server Component virou `router.replace` num efeito.
+- [x] Rotas dinâmicas viraram query string. `[planId]` e `[subjectName]` deixaram de ser rotas:
+      os componentes foram para `src/components/PlanDetail.tsx` e `src/components/SubjectDetail.tsx`,
+      e `planos/page.tsx` / `materias/page.tsx` viraram um `Suspense` + `useSearchParams` que decide
+      entre lista e detalhe. Foram mesmo 3 pontos de navegação, como o levantamento previa.
+  - [x] `/planos?id=<uuid>`
+  - [x] `/materias?nome=<x>`
+- [x] `src/app/api/import-guide/route.ts` **deletada** — junto com a funcionalidade inteira (0.4).
+- [x] `src/lib/supabase/server.ts` deletado. Não sobrou nenhum `cookies()` nem `next/headers` no `src/`.
+- [x] `npm run start:web` conferido servindo `out/` — o E2E completo passa contra o bundle estático,
+      sem servidor Node em lugar nenhum.
+      ⚠️ **Correção:** o script usava `serve -s`, que reescreve *toda* rota para o `index.html` e
+      anula o `.html` por rota que o export gera — `/register` abria a raiz. O `-s` saiu. O Cloudflare
+      Pages serve o arquivo real primeiro e só cai no `_redirects` para o que não existe; sem `-s`,
+      o `serve` faz o mesmo.
 
 ## Fase 6 — Automações no GitHub
 
@@ -343,7 +367,10 @@ para ele; o comando é `node scripts/test-data-layer.mjs`.
       (`eslint.config.mjs`), e o `next lint` do Next 14 só enxerga `.eslintrc*` — o comando abria um
       wizard interativo perguntando como configurar o ESLint. Num CI, isso é um job travado.
       O script virou `cross-env ESLINT_USE_FLAT_CONFIG=true eslint src`.
-- [ ] **Zerar a dívida de lint: 200 erros e 10 warnings** (medido em 2026-09-05, com o lint
+- [x] **Zerar a dívida de lint: 200 erros → 0** (2026-09-05). Sobram os 10 warnings, que não
+      reprovam o `ci.yml`. `eslint.ignoreDuringBuilds` foi para `false`: o `next build` reprova de
+      novo. O que apareceu no caminho está no fim desta seção.
+- [ ] ~~**Zerar a dívida de lint: 200 erros e 10 warnings**~~ (medido em 2026-09-05, com o lint
       finalmente rodando). São 114 `@typescript-eslint/no-unused-vars`, 73
       `@typescript-eslint/no-explicit-any`, 6 `prefer-const`, 6 `react/no-unescaped-entities`,
       1 `no-empty-object-type`; os warnings são 7 `react-hooks/exhaustive-deps` e
@@ -409,15 +436,42 @@ se a ideia for revisar antes de publicar.
 
 ## Fase 7 — Fechamento
 
-- [ ] `electron/main.js`: remover `startNextServer()` e `ensureDataDir()`; parar de depender do Next
-      em runtime. A lógica do timer via IPC é independente e permanece, assim como o
-      `ipcMain.handle('import-guide')` acrescentado na Fase 5.
-- [ ] ⚠️ **Não usar `loadFile('out/index.html')`.** Descoberto na Fase 5: `createBrowserClient`
-      guarda a sessão em **cookie**, e o Chromium não dá cookie para origem `file://` — o login
-      simplesmente não persiste. O caminho é registrar um protocolo próprio
-      (`protocol.handle('app', ...)` no Electron 30) e carregar `app://ouroboros/index.html`, que é
-      uma origem de verdade. Alternativa pior: voltar a subir um servidor estático local só para ter
-      um `http://localhost`.
+> **Vazia.** Ela existia só para acertar o empacotamento do Electron; a decisão 0.4 apagou o
+> assunto. Fica o registro dos dois itens, porque eles descrevem armadilhas reais para quem um dia
+> pensar em ressuscitar o desktop:
+>
+> - `electron/main.js` ainda subia um servidor Next em runtime (`startNextServer()`), o que deixou
+>   de fazer sentido quando o app virou export estático.
+> - ⚠️ **Não usar `loadFile('out/index.html')`.** `createBrowserClient` guarda a sessão em
+>   **cookie**, e o Chromium não dá cookie para origem `file://` — o login não persiste. O caminho
+>   seria `protocol.handle('app', ...)` e carregar `app://ouroboros/index.html`, que é uma origem
+>   de verdade.
+
+## O que o lint escondia (Fase 6)
+
+Zerar os 200 erros não foi só arrumar formatação — como na Fase 3 com o `tsc`, cada `any` que saiu
+expôs alguma coisa:
+
+- **Filtrar por matéria ou categoria nunca funcionou.** `FilterModal` sempre emitiu `subjects` e
+  `categories` (arrays, do `MultiSelectDropdown`), e os dois consumidores — `/historico` e o
+  `DataContext` — liam `subject` e `category` (strings, no singular). Com `onApply: (filters: any)`
+  no meio, ninguém via. Agora o tipo é o que o modal manda de verdade, e os dois filtros passaram a
+  funcionar, com múltipla escolha. É a camada seguinte do mesmo bug que a Fase 3 achou (a tela
+  passava `onApplyFilters` para uma prop chamada `onApply`, então o filtro nem disparava).
+- **IDs de sessão do ciclo eram `Date.now()`** em `CycleCreationModal` — inclusive
+  `Date.now() + Math.random()` ao duplicar, que gera um id fracionário. Viraram `crypto.randomUUID()`,
+  como todo o resto desde a Fase 3.
+- **Código morto que ninguém tinha como alcançar:** o `AddTopicModal` do detalhe do plano (o botão
+  que o abria já não existia), `generateCycle` em `/planejamento`, `handleCreateEmptyCycle`,
+  `openStopwatchModal` de `/estatisticas`, e um punhado de estados que eram escritos e nunca lidos
+  (ou lidos e nunca escritos, como `targetDuration` do cronômetro em `/estatisticas`, que era sempre
+  `undefined`).
+- **`subjectTopics.shift()`** no `DataContext` tinha o retorno guardado em `bestTopic` e nunca usado.
+  A chamada ficou (o efeito colateral de desenfileirar é intencional), mas o comentário agora diz
+  que é só isso. Vale um olhar: pelo nome, alguém quis usar esse tópico para alguma coisa.
+- `@typescript-eslint/no-unused-vars` ganhou `ignoreRestSiblings` e `argsIgnorePattern: "^_"` no
+  `eslint.config.mjs`. Sem isso, `const { id, ...resto } = obj` — que é como se omite um campo em
+  JS — vira erro, e o jeito de calar o lint seria pior que o lint.
       A outra opção — trocar o storage da sessão para `localStorage` — muda o cliente do browser
       inteiro e não vale por causa do desktop.
 - [ ] `docker-compose.yml`: trocar `NEXTAUTH_SECRET` pelas vars do Supabase e **remover o bind mount

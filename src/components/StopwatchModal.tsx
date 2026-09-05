@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useData } from '../context/DataContext';
+import * as stopwatch from '@/lib/stopwatch';
+import type { EditalTopic } from '@/lib/data';
 import { FaHandSparkles } from 'react-icons/fa';
 
 interface StopwatchModalProps {
@@ -19,7 +21,6 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
   const [isRunning, setIsRunning] = useState(false);
   const [displayTimeInput, setDisplayTimeInput] = useState('');
   const [initialTimerTime, setInitialTimerTime] = useState(0); // Stores the initial time for timer mode
-  const [sessionStartTime, setSessionStartTime] = useState(0); // Stores the elapsed time when the session starts
   const [selectedSubject, setSelectedSubject] = useState<string | undefined>(initialSubject);
   const [selectedTopic, setSelectedTopic] = useState<string | undefined>();
 
@@ -30,12 +31,12 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
 
   const subjects = useMemo(() => {
     if (!currentPlan || !currentPlan.subjects) return [];
-    return currentPlan.subjects.map((s: any) => s.subject);
+    return currentPlan.subjects.map((s) => s.subject);
   }, [currentPlan]);
 
   const topics = useMemo(() => {
     if (!selectedSubject || !currentPlan || !currentPlan.subjects) return [];
-    const subjectData = currentPlan.subjects.find((s: any) => s.subject === selectedSubject);
+    const subjectData = currentPlan.subjects.find((s) => s.subject === selectedSubject);
     return subjectData ? subjectData.topics : [];
   }, [selectedSubject, currentPlan]);
 
@@ -61,103 +62,82 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
     return ms;
   };
 
-  // --- NOVA LÓGICA DE TIMER COM IPC ---
+  // --- CRONÔMETRO ---
+  // O relógio vive em `@/lib/stopwatch`, fora do componente, para que fechar o
+  // modal não perca a contagem. Antes ele vivia no processo main do Electron,
+  // pelo mesmo motivo.
   useEffect(() => {
-    // Define a interface para a API do Electron no objeto window
-    interface ElectronAPI {
-      sendTimerCommand: (command: string) => void;
-      onTimerTick: (callback: (time: number) => void) => void;
-      removeTimerTickListeners: () => void;
-    }
-    
-    const electronAPI = (window as any).electronAPI as ElectronAPI;
+    if (!isOpen) return;
 
-    if (isOpen && electronAPI) {
-      // Remove ouvintes antigos para evitar duplicatas
-      electronAPI.removeTimerTickListeners();
-
-      // Ouve os ticks do processo principal
-      const handleTick = (currentElapsedTime: number) => {
-        if (mode === 'timer') {
-          const remainingTime = initialTimerTime - currentElapsedTime;
-          if (remainingTime <= 0) {
-            setTime(0);
-            (window as any).electronAPI?.sendTimerCommand('pause');
-            setIsRunning(false);
-          } else {
-            setTime(remainingTime);
-          }
-        } else { // modo 'cronometro'
-          setTime(currentElapsedTime);
+    const cancelar = stopwatch.subscribe((decorrido) => {
+      if (mode === 'timer') {
+        const restante = initialTimerTime - decorrido;
+        if (restante <= 0) {
+          setTime(0);
+          stopwatch.pause();
+          setIsRunning(false);
+        } else {
+          setTime(restante);
         }
-      };
-
-      electronAPI.onTimerTick(handleTick);
-
-
-      // Pede o estado atual ao abrir o modal
-      electronAPI.sendTimerCommand('get-state');
-      
-      // Guarda o tempo atual como o início da sessão para o cálculo do delta
-      setTime(prevTime => {
-        setSessionStartTime(prevTime);
-        return prevTime;
-      });
-
-    } else if (!isOpen && electronAPI) {
-      // Limpa os ouvintes quando o modal fecha
-      electronAPI.removeTimerTickListeners();
-    }
-
-    // Limpeza ao desmontar o componente
-    return () => {
-      if (electronAPI) {
-        electronAPI.removeTimerTickListeners();
+      } else {
+        setTime(decorrido);
       }
-    };
+    });
+
+    // Reabrir o modal com o cronômetro andando tem que mostrar o botão certo.
+    setIsRunning(stopwatch.isRunning());
+
+    return cancelar;
   }, [isOpen, mode, initialTimerTime]);
 
   const handlePlay = () => {
-    (window as any).electronAPI?.sendTimerCommand('start');
+    stopwatch.start();
     setIsRunning(true);
   };
 
   const handlePause = () => {
-    (window as any).electronAPI?.sendTimerCommand('pause');
+    stopwatch.pause();
     setIsRunning(false);
   };
 
   const handleReset = () => {
-    (window as any).electronAPI?.sendTimerCommand('reset');
+    stopwatch.reset();
     setIsRunning(false);
-    setSessionStartTime(0);
   };
 
   const handleSaveAndClose = () => {
-    (window as any).electronAPI?.sendTimerCommand('pause');
+    stopwatch.pause();
     setIsRunning(false);
-    
+
     let elapsedTime = 0;
     if (mode === 'timer') {
-      // Em modo timer, o tempo decorrido é o tempo inicial menos o tempo restante.
+      // Em modo timer, o tempo decorrido é o tempo inicial menos o restante.
       elapsedTime = initialTimerTime - time;
-    } else { // modo 'cronometro'
-      // Em modo cronômetro, o estado 'time' já representa o tempo decorrido.
+    } else {
+      // Em modo cronômetro, `time` já é o tempo decorrido.
       elapsedTime = time;
     }
-    
+
     onSaveAndClose(Math.max(0, elapsedTime), selectedSubject, selectedTopic);
-    
-    // Opcional: Resetar o timer global após salvar
-    // (window as any).electronAPI?.sendTimerCommand('reset');
   };
-  // --- FIM DA NOVA LÓGICA ---
+  // --- FIM DO CRONÔMETRO ---
+
+  // O modal é montado e desmontado a cada abertura (`{showStopwatchModal && ...}`),
+  // então este efeito roda de novo toda vez que ele abre. Distinguir a montagem
+  // da troca de modo é o que faz o tempo sobreviver a fechar a janela — que é a
+  // razão de o relógio morar fora do componente.
+  const primeiraExecucao = useRef(true);
 
   useEffect(() => {
-    // Pausa e reseta o timer do backend toda vez que o modo é trocado
-    (window as any).electronAPI?.sendTimerCommand('reset');
-    setIsRunning(false);
-    
+    const montando = primeiraExecucao.current;
+    primeiraExecucao.current = false;
+
+    if (!montando) {
+      // Trocar de modo zera: cronômetro e timer não compartilham contagem.
+      stopwatch.reset();
+      setIsRunning(false);
+    }
+
     if (mode === 'timer') {
       // Se nenhuma duração for fornecida, usa 25 minutos como padrão (Pomodoro)
       const initialMs = targetDuration > 0 ? targetDuration * 60 * 1000 : 25 * 60 * 1000;
@@ -165,10 +145,10 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
       setInitialTimerTime(initialMs);
       setDisplayTimeInput(formatTime(initialMs));
     } else {
-      // Reseta o estado para o modo cronômetro, começando do zero
-      setTime(0);
+      // Ao montar, retoma o que o cronômetro já acumulou; ao trocar de modo,
+      // ele acabou de ser zerado e isto dá zero de qualquer jeito.
+      setTime(stopwatch.getElapsed());
       setInitialTimerTime(0);
-      setSessionStartTime(0);
     }
   }, [mode, targetDuration]);
 
@@ -227,7 +207,7 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
   const timerProgress = initialTimerTime > 0 ? ((initialTimerTime - time) / initialTimerTime) * 100 : 0;
   const hasStarted = mode === 'cronometro' ? time > 0 || isRunning : time < initialTimerTime || isRunning;
 
-  const renderTopicOptions = (topics: any[], level = 0): React.JSX.Element[] => {
+  const renderTopicOptions = (topics: EditalTopic[], level = 0): React.JSX.Element[] => {
     return topics.flatMap(topic => {
       const prefix = '\u00A0\u00A0'.repeat(level);
       const isParent = topic.sub_topics && topic.sub_topics.length > 0;
@@ -244,7 +224,7 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
       );
 
       if (isParent) {
-        return [option, ...renderTopicOptions(topic.sub_topics, level + 1)];
+        return [option, ...renderTopicOptions(topic.sub_topics ?? [], level + 1)];
       }
       
       return [option];

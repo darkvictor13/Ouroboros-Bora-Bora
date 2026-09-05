@@ -7,6 +7,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import '../app/datepicker-custom.css';
 import { FaBook, FaBullseye, FaChartLine, FaHistory, FaTimes, FaFileAlt, FaGavel, FaQuestionCircle, FaTag } from 'react-icons/fa';
 import MultiSelectDropdown from './MultiSelectDropdown';
+import type { Filters } from '@/context/DataContext';
 
 interface EditalTopic {
   topic_text: string;
@@ -20,7 +21,7 @@ interface EditalSubject {
 interface FilterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onApply: (filters: any) => void;
+  onApply: (filters: Filters) => void;
   availableCategories: string[];
   availableSubjects: string[];
   availableEditalData: EditalSubject[];

@@ -1,15 +1,12 @@
-version: '3.8'
-
 services:
   web:
     image: ouroboros-web
-    build: .
     container_name: ouroboros-app
+    build:
+      context: .
+      # Embutidas no bundle durante o build — ver o comentário no Dockerfile.
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
     ports:
       - "3000:3000"
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/.next
-    environment:
-      - NEXTAUTH_SECRET=QUALQUER_TEXTO_AQUI

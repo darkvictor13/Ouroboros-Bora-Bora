@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { updateAllTopicWeights } from '@/lib/data';
-import type { PlanData } from '@/lib/data';
 import { useNotification } from '../context/NotificationContext';
 import { FaMagic, FaTools, FaSearch, FaTimes, FaStar, FaClock, FaCalendarAlt, FaHourglassHalf, FaQuestionCircle, FaCheckCircle, FaCopy, FaHandSparkles } from 'react-icons/fa';
 import TopicWeightsModal from './TopicWeightsModal';
@@ -27,7 +26,7 @@ interface SubjectSettings {
   [subjectId: string]: { importance: number; knowledge: number };
 }
 interface StudySession {
-  id: any;
+  id: string;
   subjectId: string;
   subject: string;
   duration: number;
@@ -50,23 +49,22 @@ interface CycleCreationModalProps {
 }
 
 const CycleCreationModal: React.FC<CycleCreationModalProps> = ({ isOpen, onClose, isEditing = false, initialData }) => {
-  const { 
-    generateStudyCycle, 
-    selectedPlanId, 
-    setStudyCycle, 
-    setCurrentProgressMinutes, 
-    setCompletedCycles, 
-    setSessionProgressMap, 
-    studyHours: dataContextStudyHours, 
-    weeklyQuestionsGoal: dataContextWeeklyQuestionsGoal, 
-    setStudyHours: setContextStudyHours, 
-    setWeeklyQuestionsGoal: setContextWeeklyQuestionsGoal, 
+  const {
+    generateStudyCycle,
+    selectedPlanId,
+    setStudyCycle,
+    setCurrentProgressMinutes,
+    setCompletedCycles,
+    setSessionProgressMap,
+    studyHours: dataContextStudyHours,
+    weeklyQuestionsGoal: dataContextWeeklyQuestionsGoal,
+    setStudyHours: setContextStudyHours,
+    setWeeklyQuestionsGoal: setContextWeeklyQuestionsGoal,
     setStudyDays: setContextStudyDays,
     stats,
     studyPlans,
     availablePlanIds,
-    updateTopicWeight, // Usaremos a função do contexto para otimismo
-    refreshPlans
+    refreshPlans,
   } = useData();
   
   const { showNotification } = useNotification();
@@ -230,16 +228,6 @@ const CycleCreationModal: React.FC<CycleCreationModalProps> = ({ isOpen, onClose
     onClose();
   };
 
-  const handleCreateEmptyCycle = () => {
-    setStudyCycle([]);
-    setCurrentProgressMinutes(0);
-    setCompletedCycles(0);
-    setContextStudyHours(studyHours);
-    setContextWeeklyQuestionsGoal(weeklyQuestionsGoal);
-    onClose();
-    showNotification('Ciclo de estudos em branco criado com sucesso! Você pode preenchê-lo manualmente.', 'success');
-  };
-
   const handleAddManualSession = () => {
     if (!newManualSessionSubjectId || !newManualSessionDuration) {
       showNotification('Por favor, selecione uma matéria e insira a duração da sessão.', 'error');
@@ -255,7 +243,7 @@ const CycleCreationModal: React.FC<CycleCreationModalProps> = ({ isOpen, onClose
     if (!selectedSubjectData) return;
 
     const newSession: StudySession = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       subjectId: selectedSubjectData.id,
       subject: selectedSubjectData.subject,
       duration: duration,
@@ -271,13 +259,13 @@ const CycleCreationModal: React.FC<CycleCreationModalProps> = ({ isOpen, onClose
   const handleDuplicateManualSession = (sessionToDuplicate: StudySession) => {
     const newSession: StudySession = {
       ...sessionToDuplicate,
-      id: Date.now() + Math.random(),
+      id: crypto.randomUUID(),
     };
     setManualStudySessions(prev => [...prev, newSession]);
     showNotification('Sessão duplicada com sucesso!', 'success');
   };
 
-  const handleRemoveManualSession = (id: any) => {
+  const handleRemoveManualSession = (id: string) => {
     setManualStudySessions(prev => prev.filter(session => session.id !== id));
     showNotification('Sessão removida.', 'info');
   };
@@ -792,7 +780,7 @@ const CycleCreationModal: React.FC<CycleCreationModalProps> = ({ isOpen, onClose
             <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">Sessões Adicionadas ({manualStudySessions.length})</h3>
             <div className="space-y-3 overflow-y-auto pr-2" style={{ maxHeight: '300px' }}>
               {manualStudySessions.length > 0 ? (
-                manualStudySessions.map((session, index) => (
+                manualStudySessions.map((session) => (
                   <div key={session.id} className="flex justify-between items-stretch p-3 bg-gray-50 rounded-lg shadow-sm dark:bg-gray-700">
                     <div className="flex items-center">
                       <span className="w-3 h-3 rounded-full mr-3" style={{ backgroundColor: session.color }}></span>

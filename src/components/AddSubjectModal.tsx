@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import AddTopicModal from './AddTopicModal'; // Import AddTopicModal
-import { FaArrowUp, FaArrowDown, FaEdit, FaTrash } from 'react-icons/fa'; // Importar ícones
 import { useNotification } from '../context/NotificationContext';
 import type { EditalTopic as Topic } from '@/lib/data';
 
@@ -240,7 +238,7 @@ const AddSubjectModal: React.FC<AddSubjectModalProps> = ({ isOpen, onClose, onSa
 
         <div className="mb-4">
           <label htmlFor="topicsContent" className="block text-sm font-bold text-gold-800 dark:text-gold-300 mb-2">
-            TÓPICOS (use 2 espaços para subtópicos e '*' no início para tópicos de agrupamento)
+            TÓPICOS (use 2 espaços para subtópicos e &apos;*&apos; no início para tópicos de agrupamento)
           </label>
           <textarea
             id="topicsContent"

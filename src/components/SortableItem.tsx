@@ -1,17 +1,18 @@
 'use client';
 
 import React from 'react';
+import type { StudySession } from '@/lib/data';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useData } from '../context/DataContext';
 import { FaPlay, FaPlus } from 'react-icons/fa';
 
 interface SortableItemProps {
-  session: any;
+  session: StudySession;
   index: number;
 }
 
-const SortableItem: React.FC<SortableItemProps> = ({ session, index }) => {
+const SortableItem: React.FC<SortableItemProps> = ({ session }) => {
   const { 
     sessionProgressMap, 
     formatMinutesToHoursMinutes, 

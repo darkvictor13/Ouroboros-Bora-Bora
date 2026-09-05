@@ -27,7 +27,9 @@ import {
   studyRecordToRow,
 } from './mappers';
 import type {
+  BackupCycleContent,
   BackupData,
+  BackupPlanContent,
   EditalSubject,
   EditalTopic,
   MutationResult,
@@ -72,8 +74,14 @@ async function requireUserId(): Promise<string> {
   return data.user.id;
 }
 
+/**
+ * O que o PostgREST (e o SDK do Supabase) devolvem em `error`. Também serve
+ * para o que um `catch` pega, que é por onde chega o erro de rede.
+ */
+type ErroLegivel = { code?: string; message?: string } | null | undefined;
+
 /** Mensagem de erro legível a partir de um erro do PostgREST. */
-function describe(error: any, fallback: string): string {
+function describe(error: ErroLegivel, fallback: string): string {
   if (!error) return fallback;
   if (error.code === '23505') return 'Já existe um plano com esse nome.';
   return error.message || fallback;
@@ -148,7 +156,7 @@ async function putIcon(
     });
 
   if (error) {
-    throw new Error(error.message || 'Falha ao enviar a imagem do plano.');
+    throw new Error((error instanceof Error ? error.message : '') || 'Falha ao enviar a imagem do plano.');
   }
 
   return objectPath;
@@ -204,9 +212,9 @@ export async function uploadPlanIcon(
 
     const signed = await signIconPaths([objectPath]);
     return { success: true, iconUrl: signed.get(objectPath) };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Erro ao enviar o ícone do plano:', error);
-    return { success: false, error: error.message || 'Falha ao processar a imagem.' };
+    return { success: false, error: (error instanceof Error ? error.message : '') || 'Falha ao processar a imagem.' };
   }
 }
 
@@ -326,9 +334,9 @@ export async function createPlan(
     }
 
     return { success: true, planId };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Erro ao criar o plano:', error);
-    return { success: false, error: error.message || 'Falha ao criar o plano.' };
+    return { success: false, error: (error instanceof Error ? error.message : '') || 'Falha ao criar o plano.' };
   }
 }
 
@@ -662,8 +670,8 @@ export async function saveStudyCycle(
     }
 
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Falha ao salvar o ciclo.' };
+  } catch (error) {
+    return { success: false, error: (error instanceof Error ? error.message : '') || 'Falha ao salvar o ciclo.' };
   }
 }
 
@@ -814,7 +822,7 @@ export async function renameSubject(
   // O ciclo guarda o nome dentro do JSONB das sessões.
   const cycle = await getStudyCycle(planId);
   if (cycle?.studyCycle) {
-    const updatedCycle = cycle.studyCycle.map((session: any) =>
+    const updatedCycle = cycle.studyCycle.map((session) =>
       session.subjectId === subjectId
         ? { ...session, subject: newSubjectName }
         : session
@@ -975,9 +983,9 @@ export async function clearAllData(): Promise<MutationResult> {
     }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Erro ao apagar todos os dados:', error);
-    return { success: false, error: error.message || 'Falha ao apagar os dados.' };
+    return { success: false, error: (error instanceof Error ? error.message : '') || 'Falha ao apagar os dados.' };
   }
 }
 
@@ -1046,8 +1054,8 @@ export async function exportAllData(): Promise<BackupData> {
 }
 
 /** O que a Fase 3 exporta e a v1 exportava têm o mesmo esqueleto aqui. */
-function backupPlanName(entry: { fileName?: string; content: any }): string {
-  const fromContent = entry.content?.name;
+function backupPlanName(entry: BackupData['plans'][number]): string {
+  const fromContent = Array.isArray(entry.content) ? undefined : entry.content?.name;
   if (typeof fromContent === 'string' && fromContent.trim()) {
     return fromContent.trim();
   }
@@ -1079,7 +1087,7 @@ export async function restoreBackup(
     const userId = await requireUserId();
     const supabase = createClient();
 
-    const cyclesBySlug = new Map<string, any>();
+    const cyclesBySlug = new Map<string, BackupCycleContent>();
     (backupData.cycles ?? []).forEach((entry) => {
       const key = slugify(
         entry.planName || (entry.fileName || '').replace(/\.cycle\.json$/i, '')
@@ -1090,15 +1098,15 @@ export async function restoreBackup(
     for (const entry of backupData.plans) {
       const raw = entry.content;
       // A v1 tinha planos gravados como array puro de matérias.
-      const content = Array.isArray(raw) ? { subjects: raw } : raw ?? {};
+      const content: BackupPlanContent = Array.isArray(raw) ? { subjects: raw } : raw ?? {};
       const name = backupPlanName(entry);
 
       const subjects = (Array.isArray(content.subjects) ? content.subjects : []).map(
-        (subject: any) => ({
+        (subject) => ({
           ...subject,
           id: subject?.id || crypto.randomUUID(),
         })
-      );
+      ) as PlanInput['subjects'];
 
       const created = await createPlan({
         name,
@@ -1118,10 +1126,12 @@ export async function restoreBackup(
       // Os IDs do backup podem não ser uuid (a v1 usava `Date.now()-random`).
       // Regravar exige remapear, mantendo o vínculo revisão → registro.
       const studyIdMap = new Map<string, string>();
-      const studyRows = (content.records ?? []).map((record: any) => {
+      // O `as` é a fronteira: o que veio do arquivo é entrada do usuário, e os
+      // mappers preenchem o que faltar com os mesmos defaults de sempre.
+      const studyRows = (content.records ?? []).map((record) => {
         const newId = crypto.randomUUID();
         studyIdMap.set(record.id, newId);
-        return studyRecordToRow({ ...record, id: newId }, userId, planId);
+        return studyRecordToRow({ ...record, id: newId } as StudyRecord, userId, planId);
       });
 
       if (studyRows.length > 0) {
@@ -1130,14 +1140,14 @@ export async function restoreBackup(
       }
 
       const reviewRows = (content.reviewRecords ?? [])
-        .filter((review: any) => studyIdMap.has(review.studyRecordId))
-        .map((review: any) =>
+        .filter((review) => studyIdMap.has(review.studyRecordId))
+        .map((review) =>
           reviewRecordToRow(
             {
               ...review,
               id: crypto.randomUUID(),
               studyRecordId: studyIdMap.get(review.studyRecordId) as string,
-            },
+            } as ReviewRecord,
             userId,
             planId
           )
@@ -1154,11 +1164,11 @@ export async function restoreBackup(
           id: crypto.randomUUID(),
           // A v1 gravava a matéria do simulado como `subjectName` em alguns
           // pontos e `name` em outros.
-          subjects: (simulado.subjects ?? []).map((subject: any) => ({
+          subjects: (simulado.subjects ?? []).map((subject) => ({
             ...subject,
             name: subject.name ?? subject.subjectName ?? '',
           })),
-        });
+        } as SimuladoRecord);
       }
 
       const cycleContent = cyclesBySlug.get(slugify(name));
@@ -1187,8 +1197,8 @@ export async function restoreBackup(
     }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Erro durante a restauração do backup:', error);
-    return { success: false, error: error.message || 'Falha ao restaurar o backup.' };
+    return { success: false, error: (error instanceof Error ? error.message : '') || 'Falha ao restaurar o backup.' };
   }
 }

@@ -1,12 +1,8 @@
 'use client';
 
 import React, { useState, Fragment } from 'react';
-import { 
-  BsCheckLg, BsXLg, BsPencilFill, BsPlusCircleFill, 
-  BsChevronUp, BsChevronDown, BsFolder, BsPlus, BsPercent
-} from 'react-icons/bs';
-import { useData, StudyRecord, EditalSubject as Subject, EditalTopic as Topic } from '../../context/DataContext';
-import { useNotification } from '../../context/NotificationContext';
+import { BsCheckLg, BsXLg, BsPencilFill, BsPlusCircleFill, BsChevronUp, BsChevronDown, BsPercent } from 'react-icons/bs';
+import { useData, StudyRecord, EditalTopic as Topic } from '../../context/DataContext';
 import StudyRegisterModal from '../../components/StudyRegisterModal';
 import TopicRow from '../../components/TopicRow';
 
@@ -21,7 +17,6 @@ const EditalPage = () => {
     loading
   } = useData();
   
-  const { showNotification } = useNotification();
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null);
   const [allTopicsExpanded, setAllTopicsExpanded] = useState(true); // Novo estado para controlar a expansão/colapso de todos os tópicos
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);

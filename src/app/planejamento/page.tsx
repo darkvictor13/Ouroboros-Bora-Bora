@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useData, StudyRecord, StudySession } from '../../context/DataContext';
 import { getPlan } from '@/lib/data';
-import type { EditalSubject, EditalTopic } from '@/lib/data';
+import type { EditalSubject } from '@/lib/data';
 import Link from 'next/link';
 import { useNotification } from '../../context/NotificationContext';
 import { FaPlay, FaPlus, FaHandSparkles } from 'react-icons/fa';
@@ -18,7 +18,6 @@ import { arrayMove } from '@dnd-kit/sortable';
 
 // Interfaces
 type Subject = EditalSubject;
-type Topic = EditalTopic;
 
 interface SubjectSettings {
   [key: string]: { importance: number; knowledge: number };
@@ -170,100 +169,42 @@ const SortableItem = ({
     setIsStopwatchModalOpen, setInitialStudyRecord, setIsRegisterModalOpen,
     isEditMode, onDelete, onDuplicate, onReset,
 }: SortableItemProps) => {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: session.id });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-    };
-
-    const currentProgress = sessionProgressMap[session.id as string] || 0;
-    const isCompleted = currentProgress >= session.duration;
-    const progressPercentage = session.duration > 0 ? Math.min(100, (currentProgress / session.duration) * 100) : 0;
-
-    return (
-      <div
-        ref={setNodeRef} style={style} {...attributes} {...listeners}
-        className="rounded-md flex items-stretch transition-all duration-200 ease hover:shadow-lg hover:scale-[1.01] bg-gray-100 dark:bg-gray-700"
-        onMouseEnter={() => setHoveredSession(session.id)}
-        onMouseLeave={() => setHoveredSession(null)}
-      >
-        <div style={{ backgroundColor: session.color }} className="w-2 rounded-l-md"></div>
-        <div className="p-3 flex-grow flex flex-col">
-          <div className="flex justify-between items-center w-full mb-2">
-            <span className="font-semibold text-gray-800 dark:text-gray-100">{session.subject}</span>
-            <span className="text-sm text-gray-600 dark:text-gray-300">
-              <span className="mr-1">🕒</span>{formatMinutesToHoursMinutes(currentProgress)}/{formatMinutesToHoursMinutes(session.duration)}
-            </span>
-          </div>
-          <div className={`w-full bg-gray-200 dark:bg-gray-600 rounded-full ${hoveredSession === session.id ? 'h-3' : 'h-1'} transition-all duration-700 ease`}>
-            <div className="bg-gradient-to-r from-amber-400 to-orange-500 h-full rounded-full" style={{ width: `${progressPercentage}%` }}></div>
-          </div>
-          <div className={`flex space-x-4 mt-2 w-full ${isEditMode ? 'justify-end' : 'justify-start'}`}>
-            {isEditMode ? (
-              <>
-                <button
-                  onClick={() => onDuplicate(session)}
-                  className="text-sm font-bold text-blue-500 hover:text-blue-700 hover:underline"
-                >
-                  Duplicar
-                </button>
-                <button
-                  onClick={() => isCompleted ? onReset(session) : onDelete(session.id as string)}
-                  className="text-sm font-bold text-red-500 hover:text-red-700 hover:underline"
-                >
-                  Deletar
-                </button>
-              </>
-            ) : (
-              <>
-                {hoveredSession === session.id && !isCompleted && (
-                  <>
-                    <button
-                      onClick={() => {
-                        setStopwatchTargetDuration(session.duration);
-                        setStopwatchModalSubject(session.subject);
-                        setCurrentStudySession(session);
-                        setIsStopwatchModalOpen(true);
-                      }}
-                      className="flex items-center text-amber-500 hover:text-amber-700 hover:underline text-sm py-1 font-bold"
-                    >
-                      <FaPlay className="mr-2" />
-                      Iniciar Estudo
-                    </button>
-                    <button
-                      onClick={() => {
-                        const prefilledRecord: Partial<StudyRecord> = {
-                          subject: session.subject, topic: '', category: 'teoria',
-                          countInPlanning: true, studyTime: session.duration * 60 * 1000,
-                        };
-                        setInitialStudyRecord(prefilledRecord);
-                        setCurrentStudySession(session);
-                        setIsRegisterModalOpen(true);
-                      }}
-                      className="text-amber-500 hover:text-amber-700 hover:underline text-sm py-1 font-bold flex items-center"
-                    >
-                      <FaPlus className="mr-2" />
-                      Registrar Estudo Manual
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-};
-
-export default function Planejamento() {
-  const {
-    selectedPlanId, addStudyRecord, updateStudyRecord, resetStudyCycle,
-    studyCycle, setStudyCycle, completedCycles, currentProgressMinutes, sessionProgressMap, generateStudyCycle,
-    setCurrentStudySession, initialStudyRecord, setInitialStudyRecord, stopwatchTargetDuration,
-    setStopwatchTargetDuration, stopwatchModalSubject, setStopwatchModalSubject,
-    handleCompleteSession, currentStudySession, studyHours, setStudyHours, weeklyQuestionsGoal, 
-    setWeeklyQuestionsGoal, studyDays, setStudyDays, getRecommendedSession, studyRecords, deleteStudyRecord, cycleGenerationTimestamp
+    const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition } = useSortable({ id: session.id });      const style = {       transform: CSS.Transform.toString(transform),
+    transition,
+    };      const currentProgress = sessionProgressMap[session.id as string] || 0;     const isCompleted = currentProgress >= session.duration;     const progressPercentage = session.duration > 0 ? Math.min(100,
+    (currentProgress / session.duration) * 100) : 0;      return (       <div         ref={setNodeRef} style={style} {...attributes} {...listeners}         className="rounded-md flex items-stretch transition-all duration-200 ease hover:shadow-lg hover:scale-[1.01] bg-gray-100 dark:bg-gray-700"         onMouseEnter={() => setHoveredSession(session.id)}         onMouseLeave={() => setHoveredSession(null)}       >         <div style={{ backgroundColor: session.color }} className="w-2 rounded-l-md"></div>         <div className="p-3 flex-grow flex flex-col">           <div className="flex justify-between items-center w-full mb-2">             <span className="font-semibold text-gray-800 dark:text-gray-100">{session.subject}</span>             <span className="text-sm text-gray-600 dark:text-gray-300">               <span className="mr-1">🕒</span>{formatMinutesToHoursMinutes(currentProgress)}/{formatMinutesToHoursMinutes(session.duration)}             </span>           </div>           <div className={`w-full bg-gray-200 dark:bg-gray-600 rounded-full ${hoveredSession === session.id ? 'h-3' : 'h-1'} transition-all duration-700 ease`}>             <div className="bg-gradient-to-r from-amber-400 to-orange-500 h-full rounded-full" style={{ width: `${progressPercentage}%` }}></div>           </div>           <div className={`flex space-x-4 mt-2 w-full ${isEditMode ? 'justify-end' : 'justify-start'}`}>             {isEditMode ? (               <>                 <button                   onClick={() => onDuplicate(session)}                   className="text-sm font-bold text-blue-500 hover:text-blue-700 hover:underline"                 >                   Duplicar                 </button>                 <button                   onClick={() => isCompleted ? onReset(session) : onDelete(session.id as string)}                   className="text-sm font-bold text-red-500 hover:text-red-700 hover:underline"                 >                   Deletar                 </button>               </>             ) : (               <>                 {hoveredSession === session.id && !isCompleted && (                   <>                     <button                       onClick={() => {                         setStopwatchTargetDuration(session.duration);                         setStopwatchModalSubject(session.subject);                         setCurrentStudySession(session);                         setIsStopwatchModalOpen(true);                       }}                       className="flex items-center text-amber-500 hover:text-amber-700 hover:underline text-sm py-1 font-bold"                     >                       <FaPlay className="mr-2" />                       Iniciar Estudo                     </button>                     <button                       onClick={() => {                         const prefilledRecord: Partial<StudyRecord> = {                           subject: session.subject,
+    topic: '',
+    category: 'teoria',
+    countInPlanning: true,
+    studyTime: session.duration * 60 * 1000,
+    };                         setInitialStudyRecord(prefilledRecord);                         setCurrentStudySession(session);                         setIsRegisterModalOpen(true);                       }}                       className="text-amber-500 hover:text-amber-700 hover:underline text-sm py-1 font-bold flex items-center"                     >                       <FaPlus className="mr-2" />                       Registrar Estudo Manual                     </button>                   </>                 )}               </>             )}           </div>         </div>       </div>     ); };  export default function Planejamento() {   const {     selectedPlanId,
+    addStudyRecord,
+    updateStudyRecord,
+    resetStudyCycle,
+    studyCycle,
+    setStudyCycle,
+    completedCycles,
+    currentProgressMinutes,
+    sessionProgressMap,
+    setCurrentStudySession,
+    initialStudyRecord,
+    setInitialStudyRecord,
+    stopwatchTargetDuration,
+    setStopwatchTargetDuration,
+    stopwatchModalSubject,
+    setStopwatchModalSubject,
+    studyHours,
+    weeklyQuestionsGoal,
+    studyDays,
+    getRecommendedSession,
+    studyRecords,
+    deleteStudyRecord,
+    cycleGenerationTimestamp,
   } = useData();
   const { showNotification } = useNotification();
 
@@ -275,15 +216,15 @@ export default function Planejamento() {
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [subjectSettings, setSubjectSettings] = useState<SubjectSettings>({});
   
-  const [minSession, setMinSession] = useState('60');
-  const [maxSession, setMaxSession] = useState('120');
+  const [minSession] = useState('60');
+  const [maxSession] = useState('120');
   
   const [recommendationJustification, setRecommendationJustification] = useState<string | null>(null);
 
   const [hoveredSession, setHoveredSession] = useState<UniqueIdentifier | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
   const [isClient, setIsClient] = useState(false);
-  const [justCompletedId, setJustCompletedId] = useState<string | null>(null);
+  const [justCompletedId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [subjectToAdd, setSubjectToAdd] = useState<string>('');
   const [durationToAdd, setDurationToAdd] = useState<number>(60);
@@ -358,19 +299,6 @@ export default function Planejamento() {
     const h = Math.floor(minutes / 60);
     const m = Math.round(minutes % 60);
     return `${h}h${String(m).padStart(2, '0')}min`;
-  };
-
-  const generateCycle = () => {
-    generateStudyCycle({
-      studyHours: parseInt(studyHours, 10),
-      minSession: parseInt(minSession, 10),
-      maxSession: parseInt(maxSession, 10),
-      subjectSettings,
-      subjects: subjects.filter(s => selectedSubjects.includes(s.subject)),
-      weeklyQuestionsGoal,
-    });
-    setIsModalOpen(false);
-    showNotification('Ciclo de estudos gerado com sucesso!', 'success');
   };
 
   const sensors = useSensors(

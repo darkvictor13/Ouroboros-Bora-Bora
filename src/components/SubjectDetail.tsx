@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { FaPlusCircle, FaCaretDown, FaCaretRight } from 'react-icons/fa';
-import { getPlan, getStudyRecords } from '@/lib/data';
-import type { EditalSubject, EditalTopic, PlanData } from '@/lib/data';
+import { getPlan } from '@/lib/data';
+import type { EditalTopic, PlanData } from '@/lib/data';
 import type { StudyRecord } from '@/lib/data';
-import { useData } from '../../../context/DataContext';
-import { useTheme } from '../../../context/ThemeContext';
-import StudyRegisterModal from '../../../components/StudyRegisterModal';
+import { useData } from '@/context/DataContext';
+import { useTheme } from '@/context/ThemeContext';
+import StudyRegisterModal from '@/components/StudyRegisterModal';
 
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale } from 'chart.js';
@@ -18,7 +18,6 @@ import 'chartjs-adapter-date-fns';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale);
 
 // Interfaces
-type Subject = EditalSubject;
 type Topic = EditalTopic;
 
 /** Total de páginas cobertas pelos intervalos gravados no registro. */
@@ -60,21 +59,14 @@ const countStudiedTopicsRecursively = (topics: Topic[], studiedTopicTexts: Set<s
   return count;
 };
 
-const flattenTopicsWithLevel = (topics: Topic[], level = 0): (Topic & { level: number })[] => {
-  let flattened: (Topic & { level: number })[] = [];
-  for (const topic of topics) {
-    flattened.push({ ...topic, level });
-    if (topic.sub_topics && topic.sub_topics.length > 0) {
-      flattened = flattened.concat(flattenTopicsWithLevel(topic.sub_topics, level + 1));
-    }
-  }
-  return flattened;
-};
 
-export default function MateriaDetalhes() {
-  const params = useParams();
+/**
+ * Detalhe de uma matéria. Vive em `/materias?nome=<x>` pelo mesmo motivo do
+ * [[PlanDetail]]: `output: 'export'` não gera rota dinâmica de dado de usuário.
+ * O nome chega já decodificado — quem o lê é `src/app/materias/page.tsx`.
+ */
+export default function SubjectDetail({ subjectName }: { subjectName: string }) {
   const searchParams = useSearchParams();
-  const subjectName = decodeURIComponent(params.subjectName as string);
   const initialPlanId = searchParams.get('plan');
   const banca = searchParams.get('banca');
 
@@ -98,7 +90,6 @@ export default function MateriaDetalhes() {
   const [allTopicsExpanded, setAllTopicsExpanded] = useState(true); // Novo estado para controlar a expansão/colapso de todos os tópicos
   
   // Novos estados para os tópicos processados
-  const [flattenedTopics, setFlattenedTopics] = useState<(Topic & { level: number })[]>([]);
   const [totalTopicsCount, setTotalTopicsCount] = useState(0);
 
   useEffect(() => {
@@ -115,7 +106,6 @@ export default function MateriaDetalhes() {
 
           const subject = data.subjects.find(s => s.subject === subjectName);
           if (subject) {
-            setFlattenedTopics(flattenTopicsWithLevel(subject.topics || []));
             setTotalTopicsCount(countTopicsRecursively(subject.topics || []));
           }
         }

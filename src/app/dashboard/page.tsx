@@ -1,40 +1,22 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import Link from 'next/link';
+import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import StudyRegisterModal from '../../components/StudyRegisterModal';
 import type { ConsistencyData, StudyRecord } from '../../context/DataContext';
 import { BsPlusCircleFill } from 'react-icons/bs';
 import WeeklyStudyChart from '../../components/WeeklyStudyChart';
-import PlanSelector from '../../components/PlanSelector';
 import RevisionsSection from '../../components/RevisionsSection';
 import PlanningSection from '../../components/PlanningSection';
 import DailyStudySection from '../../components/DailyStudySection';
-import { FaCheck, FaTimes, FaChevronLeft, FaChevronRight, FaClock, FaCalendarDay, FaBullseye, FaFileAlt } from 'react-icons/fa';
+import { FaChevronLeft, FaChevronRight, FaClock, FaCalendarDay, FaBullseye, FaFileAlt } from 'react-icons/fa';
 import RemindersSection from '../../components/RemindersSection';
 import LastActivitiesSection from '../../components/LastActivitiesSection';
 
 
 // Interfaces para os dados
-interface Topic {
-  topic_text: string;
-  is_completed: boolean;
-  completed: number;
-  reviewed: number;
-}
 
-interface Subject {
-  subject: string;
-  topics: Topic[];
-  color: string;
-}
 
-interface EnrichedSubject extends Subject {
-  totalStudyTimeSubject: number;
-  totalCorrectQuestionsSubject: number;
-  totalIncorrectQuestionsSubject: number;
-}
 
 // Função auxiliar para formatar o tempo
 const formatTime = (milliseconds: number) => {
@@ -222,15 +204,12 @@ const WeeklyStudyGoals = ({ currentHours, goalHours, currentQuestions, goalQuest
 };
 
 export default function DashboardPage() {
-  const { 
-    selectedPlanId, 
-    setSelectedPlanId, 
-    availablePlanIds, 
-    addStudyRecord, 
+  const {
+    addStudyRecord,
     stats,
     handleConsistencyNav,
     studyHours,
-    weeklyQuestionsGoal
+    weeklyQuestionsGoal,
   } = useData();
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 

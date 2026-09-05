@@ -5,6 +5,7 @@
  */
 
 import type {
+  EditalSubject,
   PlanData,
   ReviewRecord,
   SimuladoRecord,
@@ -33,9 +34,15 @@ export interface PlanRow {
   edital: string;
   banca: string;
   icon_path: string | null;
-  subjects: any;
-  banca_topic_weights: any;
+  // Colunas JSONB: o Postgres devolve o que foi gravado, e backups da v1
+  // gravaram formatos diferentes. `unknown` obriga a checagem que o corpo da
+  // função já fazia.
+  subjects: unknown;
+  banca_topic_weights: unknown;
 }
+
+/** Uma matéria como ela pode vir do JSONB — todo campo pode faltar. */
+type SubjectJson = Partial<EditalSubject> | null | undefined;
 
 /** A linha do plano mais o ícone já resolvido para uma URL que a UI pode usar. */
 export function rowToPlan(row: PlanRow, iconUrl?: string): PlanData {
@@ -47,16 +54,16 @@ export function rowToPlan(row: PlanRow, iconUrl?: string): PlanData {
     edital: row.edital ?? '',
     banca: row.banca ?? '',
     iconUrl,
-    subjects: (Array.isArray(row.subjects) ? row.subjects : []).map(
-      (subject: any) => ({
+    subjects: (Array.isArray(row.subjects) ? (row.subjects as SubjectJson[]) : []).map(
+      (subject) => ({
         ...subject,
         color: subject?.color || DEFAULT_SUBJECT_COLOR,
         topics: Array.isArray(subject?.topics) ? subject.topics : [],
       })
-    ),
+    ) as PlanData['subjects'],
     bancaTopicWeights:
       row.banca_topic_weights && typeof row.banca_topic_weights === 'object'
-        ? row.banca_topic_weights
+        ? (row.banca_topic_weights as PlanData['bancaTopicWeights'])
         : {},
   };
 }
@@ -65,7 +72,25 @@ export function rowToPlan(row: PlanRow, iconUrl?: string): PlanData {
 // study_records
 // -----------------------------------------------------------------------------
 
-export function rowToStudyRecord(row: any): StudyRecord {
+export interface StudyRecordRow {
+  id: string;
+  date: string;
+  subject_id: string | null;
+  subject: string | null;
+  topic: string | null;
+  study_time: number | null;
+  questions: StudyRecord['questions'] | null;
+  pages: StudyRecord['pages'] | null;
+  videos: StudyRecord['videos'] | null;
+  notes: string | null;
+  category: string | null;
+  review_periods: string[] | null;
+  teoria_finalizada: boolean | null;
+  count_in_planning: boolean | null;
+  created_at?: string;
+}
+
+export function rowToStudyRecord(row: StudyRecordRow): StudyRecord {
   return {
     id: row.id,
     date: row.date,
@@ -114,7 +139,21 @@ export function studyRecordToRow(
 // review_records
 // -----------------------------------------------------------------------------
 
-export function rowToReviewRecord(row: any): ReviewRecord {
+export interface ReviewRecordRow {
+  id: string;
+  study_record_id: string;
+  scheduled_date: string;
+  status: ReviewRecord['status'];
+  original_date: string;
+  subject_id: string | null;
+  subject: string | null;
+  topic: string | null;
+  review_period: string;
+  completed_date: string | null;
+  ignored: boolean | null;
+}
+
+export function rowToReviewRecord(row: ReviewRecordRow): ReviewRecord {
   return {
     id: row.id,
     studyRecordId: row.study_record_id,
@@ -156,12 +195,33 @@ export function reviewRecordToRow(
 // simulado_records + simulado_subjects
 // -----------------------------------------------------------------------------
 
+export interface SimuladoSubjectRow {
+  subject_name: string | null;
+  weight: number | string | null;
+  total_questions: number | null;
+  correct: number | null;
+  incorrect: number | null;
+  color: string | null;
+  position: number | null;
+}
+
+export interface SimuladoRecordRow {
+  id: string;
+  date: string;
+  name: string | null;
+  style: string | null;
+  banca: string | null;
+  time_spent: string | null;
+  comments: string | null;
+  simulado_subjects?: SimuladoSubjectRow[] | null;
+}
+
 /** Espera a linha com as matérias embutidas (`select ..., simulado_subjects(*)`). */
-export function rowToSimuladoRecord(row: any): SimuladoRecord {
+export function rowToSimuladoRecord(row: SimuladoRecordRow): SimuladoRecord {
   const subjects: SimuladoSubject[] = (row.simulado_subjects ?? [])
     .slice()
-    .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-    .map((s: any) => ({
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((s) => ({
       name: s.subject_name ?? '',
       weight: Number(s.weight ?? 1),
       totalQuestions: s.total_questions ?? 0,
@@ -221,7 +281,19 @@ export function simuladoSubjectsToRows(
 // study_cycles
 // -----------------------------------------------------------------------------
 
-export function rowToStudyCycle(row: any): StudyCycleData {
+export interface StudyCycleRow {
+  cycle: StudyCycleData['studyCycle'];
+  study_hours: string | null;
+  weekly_questions_goal: string | null;
+  current_progress_minutes: number | null;
+  session_progress_map: StudyCycleData['sessionProgressMap'] | null;
+  reminder_notes: StudyCycleData['reminderNotes'] | null;
+  study_days: string[] | null;
+  completed_cycles: number | null;
+  cycle_generation_timestamp: number | string | null;
+}
+
+export function rowToStudyCycle(row: StudyCycleRow): StudyCycleData {
   return {
     studyCycle: row.cycle ?? null,
     studyHours: row.study_hours ?? '0',

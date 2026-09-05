@@ -2,16 +2,7 @@
 
 import React, { useState } from 'react';
 import { Bar } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-import type { ChartOptions, TooltipItem } from 'chart.js';
+import type { TooltipItem } from 'chart.js';
 
 
 
@@ -33,9 +24,21 @@ const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }: WeeklyStudyCh
     );
   }
 
-  const processChartData = (dailyData: Record<string, any>, dataKey: 'hours' | 'total') => {
-    const weekLabels = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
-    const today = new Date();
+  /**
+   * `dataKey` diz qual dos dois mapas está chegando: `hours` traz um número por
+   * dia, `total` traz `{ correct, total }`. Eram um `any` só; agora é uma
+   * sobrecarga com o leitor certo para cada formato.
+   */
+  function processChartData(dailyData: { [date: string]: number }, dataKey: 'hours'): number[];
+  function processChartData(
+    dailyData: { [date: string]: { correct: number; total: number } },
+    dataKey: 'total'
+  ): number[];
+  function processChartData(
+    dailyData: { [date: string]: number | { correct: number; total: number } },
+    dataKey: 'hours' | 'total'
+  ): number[] {
+      const today = new Date();
     const dayOfWeek = today.getDay(); // Sunday = 0, Monday = 1, etc.
 
     // Adjust to have Sunday as the first day of the week
@@ -50,16 +53,17 @@ const WeeklyStudyChart = ({ dailyStudyHours, dailyQuestionStats }: WeeklyStudyCh
       date.setDate(firstDayOfWeek.getDate() + i);
       const dateString = date.toISOString().split('T')[0];
 
-      if (dailyData && dailyData[dateString]) {
+      const doDia = dailyData?.[dateString];
+      if (doDia) {
         if (dataKey === 'hours') {
-          weeklyData[i] = parseFloat((dailyData[dateString] || 0).toFixed(1)); // Directly use the value for hours
-        } else if (dataKey === 'total') {
-          weeklyData[i] = dailyData[dateString].total || 0; // Use total for questions
+          weeklyData[i] = parseFloat((typeof doDia === 'number' ? doDia : 0).toFixed(1));
+        } else {
+          weeklyData[i] = typeof doDia === 'number' ? 0 : doDia.total || 0;
         }
       }
     }
     return weeklyData;
-  };
+  }
 
   const timeData = {
     labels: ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'],

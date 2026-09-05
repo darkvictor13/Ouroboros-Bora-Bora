@@ -72,9 +72,9 @@ const BackupPage = () => {
           window.location.reload();
         }, 2000);
 
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
-        setError(err.message || 'Ocorreu um erro ao importar o arquivo. Verifique se o arquivo é um backup válido.');
+        setError(err instanceof Error ? err.message : 'Ocorreu um erro ao importar o arquivo. Verifique se o arquivo é um backup válido.');
         setSuccess(null);
       } finally {
         setIsLoading(false);
@@ -98,9 +98,9 @@ const BackupPage = () => {
       setTimeout(() => {
         window.location.reload();
       }, 2000);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || 'Ocorreu um erro ao apagar os dados.');
+      setError(err instanceof Error ? err.message : 'Ocorreu um erro ao apagar os dados.');
       setSuccess(null);
     } finally {
       setIsLoading(false);
@@ -179,7 +179,7 @@ const BackupPage = () => {
                 <FaExclamationTriangle className="h-5 w-5 mr-3 mt-1" />
                 <div>
                   <p className="font-bold">ATENÇÃO: Esta ação é irreversível!</p>
-                  <p>Ao clicar em "Começar do Zero", todos os seus dados de planos, estudos, revisões e simulados serão PERMANENTEMENTE apagados. Use com extrema cautela.</p>
+                  <p>Ao clicar em &quot;Começar do Zero&quot;, todos os seus dados de planos, estudos, revisões e simulados serão PERMANENTEMENTE apagados. Use com extrema cautela.</p>
                 </div>
               </div>
             </div>

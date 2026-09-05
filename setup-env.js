@@ -1,46 +1,62 @@
+#!/usr/bin/env node
+/**
+ * Valida o `.env.local`.
+ *
+ * Até a v1 este script criava `data/` + `data/users.json` e sorteava um
+ * `NEXTAUTH_SECRET`. Nada disso existe mais: os dados moraram no Postgres do
+ * Supabase (Fase 1) e a autenticação é do Supabase Auth (Fase 2). O que sobrou
+ * é conferir se as duas variáveis que o app precisa estão preenchidas — sem
+ * elas, `createClient()` em `src/lib/supabase/client.ts` lança no primeiro
+ * acesso, e o erro aparece só no browser.
+ */
+
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 
-// --- 1. Setup do Diretório de Dados ---
-const dataDir = path.join(__dirname, 'data');
-const usersFile = path.join(dataDir, 'users.json');
+const OBRIGATORIAS = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+const OBSOLETAS = ['NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'DATA_DIR'];
 
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir);
-  console.log('Diretório "data" criado.');
+const raiz = __dirname;
+const envPath = path.join(raiz, '.env.local');
+const examplePath = path.join(raiz, '.env.local.example');
+
+if (!fs.existsSync(envPath)) {
+  if (!fs.existsSync(examplePath)) {
+    console.error('✗ Não achei nem .env.local nem .env.local.example.');
+    process.exit(1);
+  }
+  fs.copyFileSync(examplePath, envPath);
+  console.log('→ .env.local criado a partir de .env.local.example.');
+  console.log('  Preencha os valores e rode `npm run setup` de novo.');
+  console.log('  Para o Supabase local, eles saem de `npx supabase status`.');
+  process.exit(1);
 }
 
-if (!fs.existsSync(usersFile)) {
-  fs.writeFileSync(usersFile, '[]', 'utf8');
-  console.log('Arquivo "users.json" criado.');
+// Parser deliberadamente bobo: só o suficiente para `CHAVE=valor`. Quem lê o
+// arquivo de verdade é o Next.
+const valores = new Map();
+for (const linha of fs.readFileSync(envPath, 'utf8').split('\n')) {
+  const limpa = linha.trim();
+  if (!limpa || limpa.startsWith('#')) continue;
+  const igual = limpa.indexOf('=');
+  if (igual === -1) continue;
+  valores.set(limpa.slice(0, igual).trim(), limpa.slice(igual + 1).trim());
 }
 
-// --- 2. Setup das Variáveis de Ambiente ---
-const envFilePath = path.join(__dirname, '.env.local');
+const faltando = OBRIGATORIAS.filter((chave) => !valores.get(chave));
 
-// Gera a chave secreta
-const secret = crypto.randomBytes(32).toString('hex');
-
-let envFileContent = '';
-
-// Verifica se o .env.local existe
-if (fs.existsSync(envFilePath)) {
-  envFileContent = fs.readFileSync(envFilePath, 'utf8');
+if (faltando.length > 0) {
+  console.error('✗ .env.local incompleto. Sem valor:');
+  for (const chave of faltando) console.error(`    ${chave}`);
+  console.error('\n  Supabase local: `npx supabase status`.');
+  console.error('  Supabase hospedado: Project Settings → API.');
+  process.exit(1);
 }
 
-// Remove linhas antigas para evitar duplicatas
-const lines = envFileContent.split('\n');
-const newLines = lines.filter(line => 
-  !line.startsWith('NEXTAUTH_SECRET=') && 
-  !line.startsWith('NEXTAUTH_URL=')
-);
+const sobras = OBSOLETAS.filter((chave) => valores.has(chave));
+if (sobras.length > 0) {
+  console.warn(`⚠ Restos da v1 no .env.local (pode apagar): ${sobras.join(', ')}`);
+}
 
-// Adiciona as variáveis atualizadas
-newLines.push(`NEXTAUTH_SECRET=${secret}`);
-newLines.push('NEXTAUTH_URL=http://localhost:3000');
-
-fs.writeFileSync(envFilePath, newLines.join('\n').trim());
-
-console.log('Arquivo .env.local configurado com NEXTAUTH_SECRET e NEXTAUTH_URL.');
-console.log('Setup completo! O ambiente está pronto.');
+console.log('✓ .env.local ok.');
+console.log(`  NEXT_PUBLIC_SUPABASE_URL = ${valores.get('NEXT_PUBLIC_SUPABASE_URL')}`);

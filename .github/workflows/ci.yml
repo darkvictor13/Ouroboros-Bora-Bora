@@ -1,0 +1,67 @@
+name: CI
+
+# Roda em todo PR. É o teste de regressão que a Fase 3 do TODO.md compra ao
+# desligar `typescript.ignoreBuildErrors` e `eslint.ignoreDuringBuilds`:
+# sem aqueles dois `ignore`, `tsc` e `next build` voltam a reprovar de verdade.
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Typecheck, lint e build
+    runs-on: ubuntu-latest
+    env:
+      # O build só precisa das duas para inlinar no bundle. Quem protege os
+      # dados é a RLS, então a anon key não é segredo — mas fica em secrets
+      # para não amarrar o workflow a um projeto Supabase específico.
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  migrations:
+    name: Migrations aplicam e passam no lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # `db start` aplica supabase/migrations/* num Postgres limpo. Migration
+      # que não aplica reprova o PR antes de chegar perto do banco remoto.
+      - name: Subir o Postgres local e aplicar as migrations
+        run: supabase db start
+
+      # `--fail-on error` porque, sem ele, o lint imprime e sai 0.
+      - name: Lint do schema
+        run: supabase db lint --local --level warning --fail-on error
+
+      # Guarda do objetivo 2 do TODO.md ("todas as tabelas com RLS"): o advisor
+      # de segurança reprova tabela em `public` sem RLS habilitada, então
+      # ninguém acrescenta tabela desprotegida sem o PR reclamar.
+      - name: Advisors de segurança
+        run: supabase db advisors --local --type security --level warn --fail-on error

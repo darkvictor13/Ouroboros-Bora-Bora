@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 
 interface StudySession {
-  id: any;
+  id: string;
   subject: string;
   duration: number;
   color: string;

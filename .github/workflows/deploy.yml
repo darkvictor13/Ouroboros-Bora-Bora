@@ -1,0 +1,75 @@
+name: Deploy
+
+# Push na master: migration primeiro, deploy depois.
+#
+# O TODO.md previa dois arquivos (`migrations.yml` e `deploy.yml`) encadeados
+# com `needs:`. `needs:` só existe entre jobs do MESMO workflow, e a alternativa
+# (`workflow_run`) roda em outro contexto e falha em silêncio. Então virou um
+# arquivo com dois jobs, que é o encadeamento que o TODO pedia. O
+# `supabase db lint` do PR ficou no ci.yml.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Deploy não cancela deploy: um `db push` interrompido no meio deixa o banco
+# num estado que ninguém registrou.
+concurrency:
+  group: deploy-master
+  cancel-in-progress: false
+
+jobs:
+  migrations:
+    name: Aplicar migrations no Supabase
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link com o projeto
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_ID }}"
+
+      # `--include-all` para não parar numa migration fora de ordem cronológica,
+      # que acontece sempre que dois PRs com migration são mergeados de véspera.
+      - name: db push
+        run: supabase db push --include-all
+
+  deploy:
+    name: Publicar no Cloudflare Pages
+    # A migration roda ANTES: subir um bundle que espera uma coluna que ainda
+    # não existe é o jeito mais barato de derrubar todo mundo.
+    needs: migrations
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # `output: 'export'` faz isto gerar `out/`, estático puro.
+      - run: npm run build
+
+      - name: wrangler pages deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy out
+            --project-name=${{ vars.CLOUDFLARE_PROJECT_NAME }}
+            --branch=master

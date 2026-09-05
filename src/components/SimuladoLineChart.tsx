@@ -2,16 +2,6 @@
 
 import React from 'react';
 import { Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
 import type { ChartOptions } from 'chart.js';
 import { useTheme } from '../context/ThemeContext';
 
@@ -142,9 +132,7 @@ export default function SimuladoLineChart({ labels, performanceData, scoreData, 
           font: {
             size: 12,
           },
-          callback: function(value: any) {
-            return Math.round(value);
-          },
+          callback: (value: string | number) => Math.round(Number(value)),
         },
       },
     },
