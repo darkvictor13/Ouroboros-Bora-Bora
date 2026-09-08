@@ -10,7 +10,9 @@
  *   4. O evento vai marcado com o `environment` e a `release` certos?
  *   5. O `user` do evento tem só o `id` — sem e-mail, que é credencial de login?
  *   6. O `ignoreErrors` derruba o ruído de rede, que é o que estoura 5.000 erros/mês?
- *   7. O deploy publicou algum `.map`? (publicar mapa é publicar o código-fonte)
+ *   7. O ingest do Sentry ACEITOU o evento, ou recusou? (Allowed Domains recusa por origem, e
+ *      o evento sai do browser do mesmo jeito — de dentro da aba os dois casos são idênticos)
+ *   8. O deploy publicou algum `.map`? (publicar mapa é publicar o código-fonte)
  *
  * Custo: manda 1 evento de verdade para o projeto. Ver PLANO-SENTRY.md.
  *
@@ -47,7 +49,7 @@ page.on('request', (r) => {
     .split('\n')
     .map((linha) => { try { return JSON.parse(linha); } catch { return null; } })
     .filter((o) => o && (o.exception || o.message));
-  envelopes.push({ url: r.url(), corpo, eventos });
+  envelopes.push({ req: r, url: r.url(), corpo, eventos });
 });
 
 try {
@@ -115,7 +117,25 @@ try {
     evento ? Object.keys(user).join(', ') || '(sem user)' : 'sem evento, nada a afirmar'
   );
 
-  // 7 — o `.map` de um chunk qualquer não pode estar no ar.
+  // 7 — só a resposta do ingest distingue "enviado" de "aceito". Allowed Domains barra por
+  // `Origin`, e um 403 aqui é a diferença entre a issue existir e não existir.
+  if (envelope) {
+    const resposta = await envelope.req.response();
+    const status = resposta?.status();
+    check(
+      'ingest aceitou o evento',
+      status === 200,
+      status === 403
+        ? '403 — origem recusada, confira Allowed Domains do projeto'
+        : status === 429
+          ? '429 — rate limit (Spike Protection ou quota do mês)'
+          : `HTTP ${status}`
+    );
+  } else {
+    check('ingest aceitou o evento', false, 'nenhum envelope para conferir');
+  }
+
+  // 8 — o `.map` de um chunk qualquer não pode estar no ar.
   const chunk = await page.evaluate(() =>
     performance
       .getEntriesByType('resource')

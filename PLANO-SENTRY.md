@@ -13,17 +13,26 @@
 > | Código do app (§7.1) | **feito** — `@sentry/react` 10.73.0, `initSentry`, `setUser`, barreira de erro |
 > | Sourcemaps no build (§7.3) | **feito** — `@sentry/webpack-plugin` 5.4.0, só na compilação de cliente e só com token |
 > | `deploy.yml` (§7.2) | **feito** — 7 variáveis, todas opcionais, mais a guarda do `find` |
-> | Verificação (`npm run test:sentry`) | **feita, 8/8** contra o bundle estático servido localmente, com DSN de teste |
-> | Primeiro deploy com o código (34268546566) | **verde, e sem Sentry** — só o token chegou ao environment; ver Achado 2 |
+> | Environment `staging` no GitHub | **feito** — secret `NEXT_PUBLIC_SENTRY_DSN` + variables `SENTRY_ENVIRONMENT`, `SENTRY_ORG` (`bora-estudar`), `SENTRY_PROJECT` (`bora-estudar-staging`) |
+> | Verificação contra staging (`npm run test:sentry`) | **9/9** no deploy 34270019667 — inclusive `ingest aceitou o evento :: HTTP 200` |
+> | Sourcemaps | **subindo** — `Successfully uploaded source maps to Sentry`, 73 arquivos |
 > | Conta, projetos, token, Spike Protection, Allowed Domains | **do dono do projeto** — nada disso tem API antes da conta existir |
 > | Uptime monitor e cron monitor (§7.4) | **esperam produção existir** (ver §8) |
 >
-> ### O que a verificação provou (8/8, DSN de teste, bundle estático)
+> ### O que a verificação provou (9/9, staging real, 2026-09-08)
 >
-> SDK inicializado a partir do DSN inlinado; integração `Supabase` registrada sobre o cliente
-> singleton; erro real sai da aba e chega ao endpoint do projeto; evento marcado com
-> `environment` e `release`; **`user` sem e-mail, sem username e sem IP**; `ignoreErrors`
+> SDK inicializado a partir do DSN inlinado (`o4512052295827456`); integração `Supabase`
+> registrada sobre o cliente singleton; erro real sai da aba, chega ao endpoint do projeto e
+> volta **HTTP 200** — aceito, não recusado por origem; evento marcado com `environment=staging`
+> e `release` = SHA do commit; **`user` sem e-mail, sem username e sem IP**; `ignoreErrors`
 > derrubando `Failed to fetch`; e nenhum `.map` servido (404).
+>
+> O 9º check existe porque de dentro da aba "enviado" e "aceito" são idênticos: só a resposta do
+> ingest distingue os dois, e um 403 do Allowed Domains seria a diferença entre a issue existir
+> e não existir.
+>
+> Falta **um** item, e ele não tem API: abrir a issue no painel e confirmar que o stack trace
+> veio desminificado. Só um token com `project:read` permitiria checar isso daqui.
 >
 > ### Custo no bundle
 >
@@ -264,15 +273,15 @@ Feito:
 
 Do dono do projeto (nada abaixo existe antes da conta):
 
-- [ ] Criar org no Sentry + projetos `bora-estudar-staging` e `bora-estudar-prod` (platform: React)
+- [x] Criar org (`bora-estudar`) + projeto `bora-estudar-staging` (o de produção fica para o §8)
 - [ ] Spike Protection nos dois; inbound filters; Allowed Domains por projeto
-- [ ] Auth token de org (escopo de release) → secret `SENTRY_AUTH_TOKEN` **do repositório**
-- [ ] No environment `staging`: secret `NEXT_PUBLIC_SENTRY_DSN` e variables `SENTRY_ENVIRONMENT=staging`,
-      `SENTRY_ORG`, `SENTRY_PROJECT` (e `SENTRY_URL` só se a org for da região EU)
+- [x] Auth token de org (escopo de release) → secret `SENTRY_AUTH_TOKEN` **do repositório**
+- [x] No environment `staging`: secret `NEXT_PUBLIC_SENTRY_DSN` e variables `SENTRY_ENVIRONMENT=staging`,
+      `SENTRY_ORG`, `SENTRY_PROJECT` (região US, então sem `SENTRY_URL`)
 
 Depois do primeiro deploy com DSN:
 
-- [ ] `BASE=https://ouroboros-bora-bora-staging.pages.dev ESPERADO_ENV=staging npm run test:sentry`
+- [x] `BASE=https://ouroboros-bora-bora-staging.pages.dev ESPERADO_ENV=staging npm run test:sentry` — 9/9
 - [ ] Conferir na issue que o stack trace veio **desminificado** (é o que prova o upload de sourcemap)
 - [ ] Uptime monitor em produção; cron monitor no `keepalive.yml` (§7.4, dependem do §8)
 - [ ] Olhar `Stats → Usage` depois de uma semana, antes de ligar tracing ou replay
