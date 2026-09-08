@@ -53,29 +53,43 @@ page.on('request', (r) => {
 try {
   await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
 
-  const iniciado = await page.evaluate(() => Boolean(window.__SENTRY__));
-  check('SDK inicializado (o DSN chegou ao bundle)', iniciado);
-
-  const integracoes = await page.evaluate(() => {
+  // `window.__SENTRY__` NÃO serve como sinal: o carrier existe só por o SDK estar no bundle
+  // (o `Sentry.setUser` do AuthContext já o importa), mesmo sem `init`. Quem só nasce no `init`
+  // é o *client* — então é ele que responde "o DSN chegou ao bundle?".
+  const sdk = await page.evaluate(() => {
     const carrier = window.__SENTRY__;
-    if (!carrier) return [];
+    if (!carrier) return { cliente: false, integracoes: [], dsn: null };
     for (const chave of Object.keys(carrier)) {
       const cliente =
         carrier[chave]?.stack?.getClient?.() ?? carrier[chave]?.defaultCurrentScope?.getClient?.();
-      if (cliente?._integrations) return Object.keys(cliente._integrations);
+      if (cliente) {
+        return {
+          cliente: true,
+          integracoes: Object.keys(cliente._integrations ?? {}),
+          dsn: cliente.getOptions?.().dsn ?? null,
+        };
+      }
     }
-    return [];
+    return { cliente: false, integracoes: [], dsn: null };
   });
-  check('integração do Supabase registrada', integracoes.includes('Supabase'), integracoes.join(', '));
+  const iniciado = sdk.cliente;
+  check(
+    'SDK inicializado (o DSN chegou ao bundle)',
+    iniciado,
+    iniciado ? String(sdk.dsn).replace(/\/\/[^@]+@/, '//***@') : 'nenhum client — `Sentry.init` não rodou'
+  );
+  check('integração do Supabase registrada', sdk.integracoes.includes('Supabase'), sdk.integracoes.join(', '));
 
   // 6 antes de 3: o ruído de rede não pode gerar evento, e é mais fácil afirmar isso
   // enquanto nenhum evento legítimo foi enviado ainda.
   await page.evaluate(() => { setTimeout(() => { throw new Error('Failed to fetch'); }, 0); });
   await page.waitForTimeout(2000);
+  // `iniciado &&` porque sem SDK nenhum envelope sai, e a ausência viraria um PASS vazio —
+  // que é pior que nenhum check: esconde justamente a configuração faltando.
   check(
     'ignoreErrors derruba erro de rede',
-    !envelopes.some((e) => e.corpo.includes('Failed to fetch')),
-    `${envelopes.length} envelope(s) até aqui`
+    iniciado && !envelopes.some((e) => e.corpo.includes('Failed to fetch')),
+    iniciado ? `${envelopes.length} envelope(s) até aqui` : 'sem SDK, nada a afirmar'
   );
 
   const marca = `smoke-sentry-${Date.now()}`;
@@ -97,8 +111,8 @@ try {
   const user = evento?.user ?? {};
   check(
     'evento não carrega e-mail, username nem IP',
-    !user.email && !user.username && !user.ip_address,
-    Object.keys(user).join(', ')
+    Boolean(evento) && !user.email && !user.username && !user.ip_address,
+    evento ? Object.keys(user).join(', ') || '(sem user)' : 'sem evento, nada a afirmar'
   );
 
   // 7 — o `.map` de um chunk qualquer não pode estar no ar.
