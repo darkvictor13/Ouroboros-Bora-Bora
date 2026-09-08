@@ -51,6 +51,21 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      # Sentry. Tudo aqui é opcional por construção: sem `NEXT_PUBLIC_SENTRY_DSN` o SDK não
+      # inicializa, e sem `SENTRY_AUTH_TOKEN` o build não gera nem sobe sourcemap. Então o
+      # deploy continua verde enquanto os projetos do Sentry não existirem.
+      # O DSN é público (só permite escrever evento, não ler), igual à anon key; o
+      # AUTH_TOKEN é segredo de verdade e por isso NÃO é `NEXT_PUBLIC_`.
+      NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+      NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT }}
+      # Amarra a issue ao commit exato que a causou.
+      NEXT_PUBLIC_SENTRY_RELEASE: ${{ github.sha }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+      # Só na região EU do Sentry; vazio usa sentry.io.
+      SENTRY_URL: ${{ vars.SENTRY_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -63,6 +78,13 @@ jobs:
 
       # `output: 'export'` faz isto gerar `out/`, estático puro.
       - run: npm run build
+
+      # Guarda de sourcemap: o plugin do Sentry já apaga os `.map` de `.next/static` depois de
+      # subir, mas o `next build` copia esse diretório para `out/_next/static` no mesmo comando
+      # e a ordem entre as duas coisas não é contratual. Publicar `.map` no Pages é publicar o
+      # código-fonte, então a garantia fica aqui, uma linha antes do deploy.
+      - name: Garantir que nenhum sourcemap vá para o Pages
+        run: find out -name '*.map' -delete -print
 
       - name: wrangler pages deploy
         uses: cloudflare/wrangler-action@v3

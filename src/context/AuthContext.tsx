@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
+import * as Sentry from '@sentry/react';
 import { createClient } from '@/lib/supabase/client';
 
 /**
@@ -49,6 +50,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const user = session?.user ?? null;
   const userId = user?.id ?? null;
+
+  // Identidade no Sentry: só o `id`, nunca o e-mail — ele é a credencial de login e não tem por
+  // que existir fora do Supabase. No-op quando o Sentry não foi inicializado (sem DSN).
+  useEffect(() => {
+    Sentry.setUser(userId ? { id: userId } : null);
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) {
