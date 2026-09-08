@@ -1,9 +1,32 @@
 const { sentryWebpackPlugin } = require('@sentry/webpack-plugin');
 
-// O upload de sourcemap só acontece quando existe token — em CI, no job de deploy. Sem ele
-// (build local, `npm run build` do ci.yml) nem os mapas são gerados, o que também garante que
-// nenhum build acidental publique o código-fonte. Ver PLANO-SENTRY.md §7.3.
-const uploadDeSourcemaps = Boolean(process.env.SENTRY_AUTH_TOKEN);
+// O upload de sourcemap exige as duas pontas: o token (só o CI tem) e o DSN (que é o
+// interruptor do Sentry por ambiente). Sem elas nem os mapas são gerados, o que também garante
+// que nenhum build acidental publique o código-fonte. Ver PLANO-SENTRY.md §7.3.
+const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+const sentryToken = process.env.SENTRY_AUTH_TOKEN;
+const uploadDeSourcemaps = Boolean(sentryToken && sentryDsn);
+
+// Config pela metade é o pior dos mundos, e o plugin não reclama dela: com `project` vazio ele
+// emite um *Warning* ("Will not upload source maps"), o `errorHandler` não é chamado e o build
+// sai 0 — verificado no deploy 34268546566. O resultado seria produção reportando erro com
+// stack trace minificado, sem nada vermelho em lugar nenhum. Então a checagem é aqui.
+if (uploadDeSourcemaps && !(process.env.SENTRY_ORG && process.env.SENTRY_PROJECT)) {
+  throw new Error(
+    'Sentry: NEXT_PUBLIC_SENTRY_DSN e SENTRY_AUTH_TOKEN estão definidos, mas SENTRY_ORG e/ou ' +
+      'SENTRY_PROJECT não. O build sairia sem sourcemap e toda issue viria minificada. ' +
+      'Defina as duas como variables do environment, ou remova o DSN para desligar o Sentry.'
+  );
+}
+
+// O caso oposto — token presente, DSN vazio — não é erro: é um ambiente que ainda não tem
+// projeto no Sentry. Mas é silencioso demais para passar batido no log de um deploy.
+if (sentryToken && !sentryDsn) {
+  console.warn(
+    '[sentry] SENTRY_AUTH_TOKEN presente, NEXT_PUBLIC_SENTRY_DSN vazio: este bundle vai SEM ' +
+      'Sentry. Se não é isso que você quer, confira o secret do environment.'
+  );
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

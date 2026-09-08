@@ -14,6 +14,7 @@
 > | Sourcemaps no build (§7.3) | **feito** — `@sentry/webpack-plugin` 5.4.0, só na compilação de cliente e só com token |
 > | `deploy.yml` (§7.2) | **feito** — 7 variáveis, todas opcionais, mais a guarda do `find` |
 > | Verificação (`npm run test:sentry`) | **feita, 8/8** contra o bundle estático servido localmente, com DSN de teste |
+> | Primeiro deploy com o código (34268546566) | **verde, e sem Sentry** — só o token chegou ao environment; ver Achado 2 |
 > | Conta, projetos, token, Spike Protection, Allowed Domains | **do dono do projeto** — nada disso tem API antes da conta existir |
 > | Uptime monitor e cron monitor (§7.4) | **esperam produção existir** (ver §8) |
 >
@@ -30,7 +31,26 @@
 > em worktree separada. É o SDK inteiro, sem tracing e sem replay; as duas integrações ficaram
 > ausentes justamente por isso (§5.4).
 >
-> ### Achado: falha de upload de sourcemap era silenciosa
+> ### Achado 2: config pela metade também era silenciosa (deploy 34268546566)
+>
+> O primeiro deploy com o código no ar saiu **verde e sem Sentry**. Chegaram ao runner só o
+> `SENTRY_AUTH_TOKEN` e o `NEXT_PUBLIC_SENTRY_RELEASE`; DSN, `SENTRY_ORG`, `SENTRY_PROJECT` e
+> `SENTRY_ENVIRONMENT` vieram vazios. O plugin reagiu com **Warning**, não com erro
+> (`No project provided. Will not upload source maps.`), então o `errorHandler` do Achado 1
+> nunca foi chamado. A guarda de agora está no `next.config.js`, antes do build:
+>
+> | Token | DSN | org+project | Resultado |
+> |---|---|---|---|
+> | — | — | — | build normal, Sentry desligado |
+> | ✓ | — | — | build normal + **aviso no log**: "este bundle vai SEM Sentry" |
+> | ✓ | ✓ | — | **build reprova** — subiria sem mapa e toda issue viria minificada |
+> | ✓ | ✓ | ✓ | upload de sourcemap |
+>
+> Ou seja: **o DSN é o interruptor por ambiente** (é ele que decide se aquele deploy tem
+> Sentry), e config pela metade não passa. O que continua fora do alcance do compilador é
+> "esqueci o DSN": para isso existe o `npm run test:sentry`.
+>
+> ### Achado 1: falha de upload de sourcemap era silenciosa
 >
 > Testado com um token inválido: o `@sentry/webpack-plugin` **loga** `Invalid org token (401)` e
 > o `next build` sai **0**. Como os `.map` são apagados depois do upload, o deploy seguiria e
