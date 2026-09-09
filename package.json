@@ -32,6 +32,8 @@
     "setup": "node setup-env.js",
     "test:rls": "node scripts/test-rls-isolation.mjs",
     "test:e2e": "node scripts/test-e2e.mjs",
+    "test:edital": "node scripts/test-edital-parser.mjs",
+    "test:template": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-template.mjs",
     "test:sentry": "node scripts/test-sentry-smoke.mjs"
   },
   "dependencies": {

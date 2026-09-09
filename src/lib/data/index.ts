@@ -26,6 +26,11 @@ import {
   studyCycleToRow,
   studyRecordToRow,
 } from './mappers';
+import {
+  dataUrlToIconFile,
+  templateToPlanInput,
+  type PlanTemplateFile,
+} from './template';
 import type {
   BackupCycleContent,
   BackupData,
@@ -42,6 +47,8 @@ import type {
 } from './types';
 
 export * from './types';
+export * from './template';
+export * from './catalog';
 
 const ICON_BUCKET = 'plan-icons';
 
@@ -338,6 +345,56 @@ export async function createPlan(
     console.error('Erro ao criar o plano:', error);
     return { success: false, error: (error instanceof Error ? error.message : '') || 'Falha ao criar o plano.' };
   }
+}
+
+export interface ImportTemplateResult {
+  success: boolean;
+  planId?: string;
+  error?: string;
+  /**
+   * O que foi descartado sem impedir a importação — hoje, só o ícone (RF-C5).
+   * A UI mostra; a operação não para por isso.
+   */
+  warnings: string[];
+}
+
+/**
+ * Cria **um** plano a partir de um template — o motor do RF-A1 (arquivo) e do
+ * RF-C3 (catálogo).
+ *
+ * O ponto todo está no que esta função *não* faz: nada de `clearAllData()`. O
+ * único caminho de importação que existia até aqui era o `/backup`, que apaga a
+ * conta inteira antes de restaurar (`clearAllData` em `:1083`). Aqui é um
+ * insert em `plans`, sob o `auth.uid()` de quem chamou, e mais nada — o resto
+ * dos planos, registros, revisões, simulados e ciclos fica intocado.
+ *
+ * O clone é **cópia, não referência**: não há chave estrangeira para o
+ * template, e editar o plano depois não afeta o catálogo nem a conta de
+ * ninguém. O preço está assumido no §8.2 — edital retificado não volta para
+ * quem já clonou.
+ */
+export async function importPlanTemplate(
+  template: PlanTemplateFile,
+  options: { name?: string } = {}
+): Promise<ImportTemplateResult> {
+  const warnings: string[] = [];
+  const input = templateToPlanInput(template, options);
+
+  if (!input.name) {
+    return { success: false, error: 'O nome do plano não pode estar vazio.', warnings };
+  }
+
+  const { file, aviso } = dataUrlToIconFile(template.plano.iconUrl, input.name);
+  if (aviso) warnings.push(aviso);
+
+  const resultado = await createPlan({ ...input, iconFile: file });
+
+  return {
+    success: resultado.success,
+    planId: resultado.planId,
+    error: resultado.error,
+    warnings,
+  };
 }
 
 /**

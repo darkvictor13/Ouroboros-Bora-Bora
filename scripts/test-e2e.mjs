@@ -409,7 +409,9 @@ await ir('/planos');
 await sleep(1800);
 await page.getByTitle('Criar Novo Plano').click();
 await page.waitForSelector('#planName', { timeout: 10000 });
-await page.setInputFiles('input[type="file"]', ICON_PATH);
+// `/planos` tem dois inputs de arquivo desde o RF-A1 (o de importar plano, e
+// este, do modal). `accept` é o que os separa.
+await page.setInputFiles('input[accept*="image"]', ICON_PATH);
 await sleep(700);
 await setValor('#planName', PLAN_ICON);
 await sleep(400);
@@ -448,6 +450,68 @@ if (backup) {
     depois.map((t) => t.trim()).includes(PLAN) && !depois.map((t) => t.trim()).includes(PLAN_ICON),
     JSON.stringify(depois.slice(0, 5)));
 }
+
+// ------------------------- 11b. importar plano de arquivo (RF-A1/A2/A5/C4)
+//
+// O ponto do RF-A1 é o contraste com o passo 11: restaurar backup apaga a conta
+// antes de recriar; importar um plano só acrescenta. O mesmo arquivo serve para
+// os dois, e é isso que torna a comparação honesta.
+passo('importar plano de arquivo');
+if (backup) {
+  await ir('/planos');
+  await sleep(2500);
+  const antesDeImportar = (await page.locator('h2').allInnerTexts()).map((t) => t.trim());
+
+  await page.setInputFiles('input[accept*="json"]', BACKUP_PATH);
+  await sleep(1800);
+
+  const nomeSugerido = await page.inputValue('#nomeDoPlano').catch(() => null);
+  check('a prévia abre com um nome livre sugerido (RF-C4)',
+    nomeSugerido === `${PLAN} (2)`, String(nomeSugerido));
+
+  const previa = await texto();
+  check('a prévia mostra a procedência e a contagem antes de gravar (RF-A5/C6)',
+    /Procedência/i.test(previa) && /Matérias/i.test(previa) && /Tópicos/i.test(previa));
+
+  check('o botão de importar está na tela', await clicarBotao(/^Importar plano$/));
+  await sleep(6000);
+
+  await ir('/planos');
+  await sleep(2500);
+  const depoisDeImportar = (await page.locator('h2').allInnerTexts()).map((t) => t.trim());
+  check('importar de arquivo cria UM plano e não apaga o que já existia',
+    depoisDeImportar.length === antesDeImportar.length + 1 &&
+    antesDeImportar.every((nome) => depoisDeImportar.includes(nome)) &&
+    depoisDeImportar.includes(`${PLAN} (2)`),
+    JSON.stringify(depoisDeImportar.slice(0, 5)));
+
+  // RF-C4: nome duplicado é barrado na tela, com mensagem — nunca com o 23505
+  // cru do Postgres.
+  await page.setInputFiles('input[accept*="json"]', BACKUP_PATH);
+  await sleep(1800);
+  await setValor('#nomeDoPlano', PLAN);
+  await sleep(600);
+  const bloqueado = await page.evaluate(() => {
+    const btn = [...document.querySelectorAll('button')].find((b) => /^Importar plano$/.test(b.textContent || ''));
+    return { desabilitado: !!btn?.disabled, aviso: /já tem um plano com esse nome/i.test(document.body.innerText) };
+  });
+  check('nome duplicado é recusado na tela, não no banco (RF-C4)',
+    bloqueado.desabilitado && bloqueado.aviso, JSON.stringify(bloqueado));
+  await clicarBotao(/^Cancelar$/, { ultimo: true });
+  await sleep(800);
+}
+
+// ------------------------------------------- 11c. catálogo de planos prontos
+passo('catálogo');
+await ir('/planos/catalogo');
+await sleep(2500);
+const catalogo = await texto();
+check('a rota do catálogo existe e não caiu no 404',
+  /Planos prontos/i.test(catalogo) && !/404/.test(catalogo), catalogo.slice(0, 120));
+// `public/catalogo/index.json` nasce vazio: publicar um plano é commit, e
+// catálogo com plano velho é pior que catálogo nenhum.
+check('catálogo vazio mostra o estado vazio, e não um erro',
+  /catálogo ainda está vazio|Buscar por concurso/i.test(catalogo), catalogo.slice(0, 200));
 
 // ---------------------------------------------------- 12. cronômetro
 passo('cronômetro');

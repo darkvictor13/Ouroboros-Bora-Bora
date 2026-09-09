@@ -461,6 +461,48 @@ se a ideia for revisar antes de publicar.
 >   seria `protocol.handle('app', ...)` e carregar `app://ouroboros/index.html`, que é uma origem
 >   de verdade.
 
+## Fase 8 — Catálogo de planos prontos + importar plano de arquivo
+
+> **F1, F2 e F3 de [`REQUISITOS-CATALOGO-PLANOS.md`](REQUISITOS-CATALOGO-PLANOS.md) feitas em
+> 2026-09-08.** F4 (catálogo em tabela, com papel de admin) e F5 (carta ao TEC) continuam fora —
+> a F4 só quando "deploy para consertar um tópico" começar a doer.
+
+O que entrou:
+
+- **`src/lib/data/template.ts`** — o contrato do arquivo de plano (`bora-estudar/plano`, versão 1),
+  puro, sem Supabase. Valida, sanea a árvore, sugere nome livre e converte o data: URI do ícone em
+  `File`. É a peça que os três caminhos (arquivo, backup, catálogo) compartilham.
+- **`src/lib/data/catalog.ts`** — lê `public/catalogo/index.json` e `<slug>.json` do CDN. Nenhuma
+  chamada ao Supabase para *ver* o catálogo.
+- **`importPlanTemplate`** em `src/lib/data/index.ts` — um insert em `plans`, e nada mais. O
+  contraste com `/backup` é o ponto: aquele chama `clearAllData()` antes de restaurar.
+- **`/planos`** ganhou "Planos prontos" e "Importar de arquivo"; **`/planos/catalogo`** é a
+  vitrine; `ImportPlanModal` + `TopicTree` são a prévia com árvore, procedência e nome editável.
+- **`scripts/edital-para-plano.mjs`** — o parser de edital do admin. Sem `--publicar` ele só
+  **propõe** a árvore na tela: o passo de revisão humana (RF-T2) é o que muda a economia do
+  projeto, e por isso é o padrão.
+- **`public/catalogo/`** — nasce vazio, com README explicando que publicar é commit.
+
+Decisões que valem registro:
+
+- **O importador aceita backup completo, não só template.** Era o motivo declarado do RF-A1 ("quem
+  tem backup precisa apagar a conta para usá-lo"): o arquivo do `/backup` traz N planos, e a tela
+  deixa escolher um. Registros, revisões e simulados do backup ficam de fora — importa-se o plano,
+  não o histórico.
+- **Uuid novo por matéria a cada clone.** O `id` da matéria é a chave dos registros de estudo e das
+  sessões do ciclo; repeti-lo faria dois planos disputarem o mesmo histórico. `bancaTopicWeights` é
+  remapeado na mesma passada.
+- **`question_count` é descartado na leitura do catálogo, não só na geração.** RF-C7 aplicado nas
+  duas pontas: o app não precisa confiar no arquivo para saber que aquilo não podia estar lá.
+- **O catálogo foi publicado vazio de propósito.** Publicar um plano exige um PDF de edital real e
+  alguém revisando a árvore contra ele — não é coisa que se inventa para encher a vitrine, e
+  catálogo com plano velho é pior que catálogo nenhum (§8.4 do documento de requisitos).
+
+Testes: `npm run test:template` (33 checks — contrato, versão incompatível, colisão de nome, ícone
+fora dos limites do bucket, uuid por clone) e `npm run test:edital` (20 checks — parser contra a
+fixture sintética de `scripts/fixtures/`). O `test:e2e` ganhou os passos 11b e 11c: importar de
+arquivo sem apagar nada, nome duplicado barrado na tela, e a rota do catálogo.
+
 ## O que o lint escondia (Fase 6)
 
 Zerar os 200 erros não foi só arrumar formatação — como na Fase 3 com o `tsc`, cada `any` que saiu
@@ -517,6 +559,28 @@ Se alguém pedir, o caminho já está desenhado e é barato:
 
 > Registrado em 2026-09-05 como decisão adiada, não como trabalho agendado. O caminho atual
 > (importação desktop-only, Fase 0.2) continua valendo e é o padrão.
+>
+> ⛔ **Descartado em 2026-09-05, depois de ler os Termos de Uso do TEC.** A seção 18, item 8
+> deles proíbe nominalmente **extensão de navegador** para coleta de conteúdo da plataforma, e o
+> item 8.2 estende a vedação ao uso pessoal acionado pelo próprio usuário — que era a premissa
+> inteira do desenho. **Não rodar o spike:** o `fetch` contra a API deles já é a conduta vedada.
+>
+> A análise completa, a cláusula na íntegra e o caminho alternativo (parser do edital, que é ato
+> oficial) estão em [`REQUISITOS-EXTENSAO.md`](REQUISITOS-EXTENSAO.md).
+>
+> ⛔ **A variante "admin importa, usuário escolhe" também foi descartada em 2026-09-08**, por ser
+> *pior* que a extensão: a vedação do item 8.1 não olha quem roda a ferramenta, e distribuir a
+> base do TEC a terceiros esbarra na seção 20 (Direitos Autorais), que proíbe reprodução "por
+> qualquer meio ou processo" — logo, transcrever à mão não conserta. O risco também sai da conta
+> de quem instalou e cai sobre o admin, nominalmente.
+>
+> ✅ **O que sobrou de aproveitável é a ideia de produto, não a fonte:** catálogo de planos
+> curado pelo admin a partir do **edital** (ato oficial, sem proteção autoral), com o usuário
+> clonando um plano para a própria conta. Análise, fluxo ponta a ponta e fases em
+> [`REQUISITOS-CATALOGO-PLANOS.md`](REQUISITOS-CATALOGO-PLANOS.md).
+>
+> **Implementado em 2026-09-08** (F1, F2 e F3) — ver a *Fase 8* acima. Nada do que entrou toca em
+> dado do TEC: a fonte é o edital, e o `question_count` é recusado nas duas pontas.
 
 ### Por que uma extensão, e não uma Edge Function ou um servidor
 
