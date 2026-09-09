@@ -122,18 +122,25 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
   };
   // --- FIM DO CRONÔMETRO ---
 
-  // O modal é montado e desmontado a cada abertura (`{showStopwatchModal && ...}`),
-  // então este efeito roda de novo toda vez que ele abre. Distinguir a montagem
-  // da troca de modo é o que faz o tempo sobreviver a fechar a janela — que é a
-  // razão de o relógio morar fora do componente.
-  const primeiraExecucao = useRef(true);
+  // Zerar o relógio é para quando o modo (ou a duração alvo) realmente muda —
+  // cronômetro e timer não compartilham contagem, e uma sessão nova do
+  // planejamento começa limpa. Montar o modal não é nenhum dos dois: o tempo
+  // sobrevive a fechar a janela, que é a razão de o relógio morar fora do
+  // componente.
+  //
+  // Por isso a comparação é com os valores anteriores, e não com um "é a
+  // primeira execução?": em `next dev` o StrictMode monta o efeito duas vezes, e
+  // um guarda de primeira execução lê `false` na segunda passada, conclui que
+  // trocaram de modo e zera a contagem que o usuário tinha. Comparar valores é
+  // idempotente — rodar o efeito duas vezes com o mesmo modo não zera nada.
+  const anterior = useRef({ mode, targetDuration });
 
   useEffect(() => {
-    const montando = primeiraExecucao.current;
-    primeiraExecucao.current = false;
+    const mudou =
+      anterior.current.mode !== mode || anterior.current.targetDuration !== targetDuration;
+    anterior.current = { mode, targetDuration };
 
-    if (!montando) {
-      // Trocar de modo zera: cronômetro e timer não compartilham contagem.
+    if (mudou) {
       stopwatch.reset();
       setIsRunning(false);
     }
@@ -312,7 +319,10 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
               className="text-8xl font-mono font-bold text-center tracking-wider bg-transparent border-none focus:outline-none focus:ring-0 w-full text-amber-500 dark:text-amber-300"
             />
           ) : (
-            <div className="text-8xl font-mono font-bold text-center tracking-wider text-amber-500 dark:text-amber-300 w-full">
+            <div
+              data-testid="stopwatch-display"
+              className="text-8xl font-mono font-bold text-center tracking-wider text-amber-500 dark:text-amber-300 w-full"
+            >
               {formatTime(time)}
             </div>
           )}
@@ -333,26 +343,26 @@ const StopwatchModal: React.FC<StopwatchModalProps> = ({ isOpen, onClose, onSave
 
         <div className="flex justify-center space-x-6">
           {!isRunning ? (
-            <button onClick={handlePlay} className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-amber-600 transition-colors dark:bg-amber-600 dark:hover:bg-amber-700">
+            <button onClick={handlePlay} aria-label="Iniciar" title="Iniciar" className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-amber-600 transition-colors dark:bg-amber-600 dark:hover:bg-amber-700">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
             </button>
           ) : (
-            <button onClick={handlePause} className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-amber-600 transition-colors dark:bg-amber-600 dark:hover:bg-amber-700">
+            <button onClick={handlePause} aria-label="Pausar" title="Pausar" className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-amber-600 transition-colors dark:bg-amber-600 dark:hover:bg-amber-700">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" /></svg>
             </button>
           )}
 
           {hasStarted && (
-            <button onClick={handleReset} className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-amber-600 transition-colors dark:bg-amber-600 dark:hover:bg-amber-700">
+            <button onClick={handleReset} aria-label="Zerar" title="Zerar" className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-amber-600 transition-colors dark:bg-amber-600 dark:hover:bg-amber-700">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 9a9 9 0 0 1 14.23-5.77M20 15a9 9 0 0 1-14.23 5.77" /></svg>
             </button>
           )}
 
-          <button onClick={handleSaveAndClose} className="w-20 h-20 bg-gray-600 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-gray-700 transition-colors dark:bg-gray-700 dark:hover:bg-gray-600">
+          <button onClick={handleSaveAndClose} aria-label="Salvar e fechar" title="Salvar e fechar" className="w-20 h-20 bg-gray-600 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-gray-700 transition-colors dark:bg-gray-700 dark:hover:bg-gray-600">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           </button>
         </div>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white text-3xl dark:text-gray-400 dark:hover:text-gray-100">&times;</button>
+        <button onClick={onClose} aria-label="Fechar" title="Fechar" className="absolute top-4 right-4 text-gray-500 hover:text-white text-3xl dark:text-gray-400 dark:hover:text-gray-100">&times;</button>
       </div>
     </div>
   );

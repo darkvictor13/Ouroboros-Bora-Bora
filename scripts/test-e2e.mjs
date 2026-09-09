@@ -17,6 +17,8 @@
  * Uso:
  *   npm run test:e2e
  *   BASE=http://localhost:3000 npm run test:e2e
+ *   HEADED=1 npm run test:e2e            # abre a janela do Chrome, para assistir
+ *   HEADED=1 SLOWMO=300 npm run test:e2e # mais devagar ainda
  *   ALLOW_REMOTE=1 BASE=https://<projeto>.pages.dev npm run test:e2e
  */
 
@@ -74,10 +76,18 @@ function check(nome, ok, detalhe = '') {
 
 const IGNORAR = [/favicon/i, /React DevTools/i];
 
+// Headless por padrão, que é o que a CI quer. `HEADED=1` abre a janela do Chrome
+// para acompanhar o teste com os próprios olhos; nesse caso um `SLOWMO` pequeno
+// (em ms, por ação) deixa o passo a passo legível em vez de um borrão.
+const HEADED = process.env.HEADED === '1';
+const SLOWMO = Number(process.env.SLOWMO || (HEADED ? 120 : 0)) || 0;
+
 const browser = await chromium.launch({
   // `channel: 'chrome'` usa o Chrome do sistema e evita baixar um browser só
   // para o teste. Sem ele, rode `npx playwright install chromium` uma vez.
   channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome',
+  headless: !HEADED,
+  slowMo: SLOWMO,
   args: ['--no-sandbox'],
 });
 const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
@@ -449,18 +459,27 @@ await sleep(2500);
 // `animate-float` nunca fica "stable" para o click do Playwright: vai por JS.
 const abrirCronometro = () =>
   page.evaluate(() => document.querySelector('button.fixed.bottom-4.right-4')?.click());
+// Do mostrador do modal, e não do texto da página: a dashboard tem horários
+// próprios, e varrer o `body` já fez um check ler o relógio errado.
 const lerCronometro = () => page.evaluate(() => {
-  const m = document.body.innerText.match(/\b\d{2}:\d{2}:\d{2}\b/);
-  return m ? m[0] : null;
+  const el = document.querySelector('[data-testid="stopwatch-display"]');
+  return el ? el.textContent.trim() : null;
 });
 const emSegundos = (t) => (t ? t.split(':').reduce((a, v) => a * 60 + Number(v), 0) : -1);
-const controle = (i) => page.evaluate((i) => {
-  [...document.querySelectorAll('button.w-20.h-20')][i]?.click();
-}, i);
+// Por rótulo, e não por posição: o botão de zerar só existe com o cronômetro
+// iniciado, e clicar por índice acertava o de salvar quando ele faltava — uma
+// falha aparecia como outra. Devolve `false` quando o botão não está na tela.
+const controle = (rotulo) => page.evaluate((r) => {
+  const btn = document.querySelector(`button[aria-label="${r}"]`);
+  btn?.click();
+  return Boolean(btn);
+}, rotulo);
+
+const fecharCronometro = () => controle('Fechar');
 
 await abrirCronometro();
 await sleep(1500);
-await controle(0);                       // play
+await controle('Iniciar');
 await sleep(1200);
 const crono1 = await lerCronometro();
 await sleep(3300);
@@ -468,13 +487,13 @@ const crono2 = await lerCronometro();
 check('o cronômetro avança no browser',
   emSegundos(crono2) > emSegundos(crono1) && emSegundos(crono2) >= 3, `${crono1} -> ${crono2}`);
 
-await controle(0);                       // pause
+await controle('Pausar');
 await sleep(500);
 const pausado = await lerCronometro();
 await sleep(2500);
 check('pausar congela a contagem', emSegundos(await lerCronometro()) === emSegundos(pausado), pausado);
 
-await page.evaluate(() => document.querySelector('button.absolute.top-4.right-4')?.click());
+await fecharCronometro();
 await sleep(1200);
 await abrirCronometro();
 await sleep(1500);
@@ -482,10 +501,14 @@ const reaberto = await lerCronometro();
 check('a contagem sobrevive a fechar e reabrir o modal',
   emSegundos(reaberto) >= emSegundos(pausado), `${pausado} -> ${reaberto}`);
 
-await controle(1);                       // reset
+const temZerar = await controle('Zerar');
 await sleep(800);
-check('reset zera o cronômetro', emSegundos(await lerCronometro()) === 0);
-await page.evaluate(() => document.querySelector('button.absolute.top-4.right-4')?.click());
+// O botão de zerar só é renderizado com a contagem em andamento, então a ausência
+// dele é um resultado por si — e não uma licença para clicar no botão vizinho.
+check('reset zera o cronômetro',
+  temZerar && emSegundos(await lerCronometro()) === 0,
+  temZerar ? '' : 'o botão Zerar não estava na tela');
+await fecharCronometro();
 await sleep(800);
 
 // ------------------------------------------------ 13. navegação geral
